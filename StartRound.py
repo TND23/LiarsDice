@@ -3,7 +3,6 @@ from Rules import *
 from User import Player
 class Game:
 
-
     def __init__(self, player_ct: int, dice_per: int):
         self.player_ct = player_ct
         self.dice_per = dice_per
@@ -72,15 +71,16 @@ class Game:
             else:
                 _p._next = self.players[i+1]
                 _p._prev
-         
+
     def start_round(self):
         for p in range(self.player_ct):
             self.players[p].roll()
         # track the total dice
         self.sum_dice()
 
-        cur = self.players[0]
-        cur.place_bet(self.last_qty, self.last_dice_val)
+        self.active_player = cur = self.players[0]
+        res = cur.place_bet(self.last_qty, self.last_dice_val)   
+        self.update_last_bet(res)
         self.continue_round(self.last_qty, self.last_dice_val)
 
     def continue_round(self, last_qty: int, last_dice_val: int):
@@ -89,6 +89,11 @@ class Game:
         res = cur.choose_bet_type(self.last_qty, self.last_dice_val)
         # if current player called the last one a liar
         if self.active_player.called_liar:
+            if self.dice_totals.get(self.last_dice_val) is None:
+                self.active_player = self.active_player._prev
+                print(f'Player {self.active_player._prev} was a liar! {self.active_player} called them out.')
+                print(f'There were {self.dice_totals[self.last_dice_val]} dice of {self.last_dice_val}')
+                self.start_round()                
             if self.dice_totals[self.last_dice_val] <= self.last_qty:
                 self.active_player.remove_die()
                 print(f'Player {self.active_player} incorrectly called {self.active_player._prev} a liar.')
@@ -101,9 +106,9 @@ class Game:
                 print(f'There were {self.dice_totals[self.last_dice_val]} dice of {self.last_dice_val}')
                 self.start_round()
         else:
-            self.last_qty = res[0]
-            self.last_dice_val = res[1]
+            self.update_last_bet(res)
             self.continue_round(self.last_qty, self.last_dice_val)
+        self.check_game_over()
 
     def next_player(self):
         self.active_player = self.active_player._next
@@ -120,12 +125,20 @@ class Game:
     def show_dice(self):
         for p in self.players:
             print(f'{p} had {p.rolls}')
-       
-
-class AI:
     
-    def __init__(self):
-        print("Hey")
+    def update_last_bet(self, tuple_qty_val):
+        self.last_dice_val = tuple_qty_val[0]
+        self.last_qty = tuple_qty_val[1]
     
+    def check_game_over(self):
+        pass
 
+    def remove_player(self):
+        pass
+
+    def end_game(self):
+
+        for player in self.players:
+            if player.dice > 0:
+                print(f'{player} wins.')
 g = Game(1,2)

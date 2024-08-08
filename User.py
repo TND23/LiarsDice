@@ -15,7 +15,7 @@ class Player:
         print(self.rolls)
             
     def call_liar(self, last_qty: int, last_face_val: int):
-        print(f"you called {self.prev} a liar")
+        print(f"you called {self._prev} a liar")
         self.called_liar = 1
         return (last_qty, last_face_val)
     
