@@ -59,18 +59,7 @@ class Game:
             self.player_ct = 2
         for p in range(self.player_ct):                            
             self.players.append(Player(self.dice_per))
-        
-        for i in range(self.player_ct):
-            _p = self.players[i]
-            if i == 0:
-                _p._prev = self.players[-1]
-                _p._next = self.players[1]
-            elif i == len(self.players) - 1:
-                _p._next = self.players[0]
-                _p._prev = self.players[-2]
-            else:
-                _p._next = self.players[i+1]
-                _p._prev
+        self.set_turn_order()
 
     def start_round(self):
         for p in range(self.player_ct):
@@ -82,7 +71,8 @@ class Game:
         res = cur.place_bet(self.last_qty, self.last_dice_val)   
         self.update_last_bet(res)
         self.continue_round(self.last_qty, self.last_dice_val)
-
+    # TODO: Split into smaller functions and DRY
+    # Want messages class to handle responses
     def continue_round(self, last_qty: int, last_dice_val: int):
         # move to next player
         cur = self.next_player()
@@ -94,21 +84,27 @@ class Game:
                 print(f'Player {self.active_player._prev} was a liar! {self.active_player} called them out.')
                 print(f'There were {self.dice_totals[self.last_dice_val]} dice of {self.last_dice_val}')
                 self.start_round()                
-            if self.dice_totals[self.last_dice_val] <= self.last_qty:
+            if self.dice_totals[self.last_dice_val] >= self.last_qty:
                 self.active_player.remove_die()
                 print(f'Player {self.active_player} incorrectly called {self.active_player._prev} a liar.')
                 print(f'There were {self.dice_totals[self.last_dice_val]} dice of {self.last_dice_val}.')
                 self.start_round()
             else:
-                self.active_player._prev.remove_die()
-                self.active_player = self.active_player._prev
                 print(f'Player {self.active_player._prev} was a liar! {self.active_player} called them out.')
                 print(f'There were {self.dice_totals[self.last_dice_val]} dice of {self.last_dice_val}')
+
+                self.active_player._prev.remove_die()
+                if self.active_player._prev.dice == 0:
+                    self.remove_player(self.active_player)
+                else:
+                    self.active_player = self.active_player._prev
+                
                 self.start_round()
         else:
             self.update_last_bet(res)
             self.continue_round(self.last_qty, self.last_dice_val)
-        self.check_game_over()
+        if self.check_game_over():
+            self.end_game()
 
     def next_player(self):
         self.active_player = self.active_player._next
@@ -130,15 +126,31 @@ class Game:
         self.last_dice_val = tuple_qty_val[0]
         self.last_qty = tuple_qty_val[1]
     
-    def check_game_over(self):
-        pass
+    def set_turn_order(self):
+        for i in range(self.player_ct):
+            _p = self.players[i]
+            if i == 0:
+                _p._prev = self.players[-1]
+                _p._next = self.players[1]
+            elif i == len(self.players) - 1:
+                _p._next = self.players[0]
+                _p._prev = self.players[-2]
+            else:
+                _p._next = self.players[i+1]
+                _p._prev
 
-    def remove_player(self):
-        pass
+    def check_game_over(self):
+        if self.players.count == 1:
+            return True
+        return False
+    
+    def remove_player(self, player):
+        self.players.remove(player)
+        self.player_ct -= 1 # Eliminate this variable?
+        self.set_turn_order() # Reset the turn order now that there is one fewer player
+
 
     def end_game(self):
+        print(f'{self.players[0]} wins.')
 
-        for player in self.players:
-            if player.dice > 0:
-                print(f'{player} wins.')
-g = Game(1,2)
+g = Game(2,2)
