@@ -1,24 +1,24 @@
 import random
 from Rules import is_valid_bet
+from GameMessage import display_dice
+names = ['Alex', 'Bob', 'Charlie', 'Denise', 'Ellyn', 'Frank', 'George', 'Hugh', 'InteractivRobot', 'John', 'Kristin', 'Leeroy', 'Marco', 'Nate', 'Orville', 'Parm', 'Quincy', 'Roger', 'Scott', 'TJ', 'Usher', 'Victor', 'Winston', 'Sir Xylophone', 'Yvette', 'Zach']
+
 class Player:
     def __init__(self, dice: int):
-        self.dice = dice
+        self.NUMDICE = dice
+        
+        self.name = names[random.randrange(len(names))]
         self.active = 1
         self.rolls = []
-        self.called_liar = 0
         self._prev, self._next = None, None
-        
+    
+    # generate dice
     def roll(self):
         self.rolls = []
-        for i in range(self.dice):
+        for i in range(self.NUMDICE):
             self.rolls.append(random.randrange(1,6))
-        print(self.rolls)
-            
-    def call_liar(self, last_qty: int, last_face_val: int):
-        print(f"you called {self._prev} a liar")
-        self.called_liar = 1
-        return (last_qty, last_face_val)
-    
+        print(f'{self.name}: {self.rolls}')
+                
     def get_qty_bet(self):
         print("How many dice")
         qty = int(input())       
@@ -55,19 +55,14 @@ class Player:
             selection = int(input())
             if selection == 1 or selection == 2:
                 valid_selection = True
-        
+        # 1 == increment bet
         if selection == 1:
             self.place_bet(last_qty, last_face_val)
-
+        # anything else == call
         else:
-            self.call_liar(last_qty, last_face_val)
+            return None
 
     def remove_die(self):
-        self.dice = self.dice - 1
-    
-    
+        self.NUMDICE -= 1
         return self._prev
-    
-
-    
     
