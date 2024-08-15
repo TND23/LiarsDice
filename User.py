@@ -1,16 +1,17 @@
 import random
 from Rules import is_valid_bet
 from GameMessage import display_dice
+from StartRound import Action
 names = ['Alex', 'Bob', 'Charlie', 'Denise', 'Ellyn', 'Frank', 'George', 'Hugh', 'InteractivRobot', 'John', 'Kristin', 'Leeroy', 'Marco', 'Nate', 'Orville', 'Parm', 'Quincy', 'Roger', 'Scott', 'TJ', 'Usher', 'Victor', 'Winston', 'Sir Xylophone', 'Yvette', 'Zach']
 
 class Player:
     def __init__(self, dice: int):
-        self.NUMDICE = dice
-        
+        self.NUMDICE = dice        
         self.name = names[random.randrange(len(names))]
         self.active = 1
         self.rolls = []
         self._prev, self._next = None, None
+        
     
     # generate dice
     def roll(self):
@@ -48,20 +49,23 @@ class Player:
         return (qty, face_val)
 
     def choose_bet_type(self, last_qty: int, last_face_val: int):
-        print("Would you like to: 1. Increase the bet or 2. Call the last better a liar (Pick 1 or 2)")
+        print("Would you like to: 0. Increase the bet or 1. Call the last better a liar (Pick 0 or 1)")
         valid_selection = False
         selection = -1
         while valid_selection == False:
             selection = int(input())
-            if selection == 1 or selection == 2:
+            if selection == Action.INC_BID or selection == Action.CALL_LIE:
                 valid_selection = True
         # 1 == increment bet
-        if selection == 1:
+        if selection == Action.INC_BID:
             self.place_bet(last_qty, last_face_val)
         # anything else == call
         else:
             return None
-
+    
+    def _get_dice(self):
+        return self.rolls
+    
     def remove_die(self):
         self.NUMDICE -= 1
         return self._prev

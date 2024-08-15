@@ -2,6 +2,7 @@ import random
 from Rules import *
 from User import Player
 from GameMessage import *
+from enum import Enum
 #import argparse
 
 # this is not working with VSCode
@@ -10,7 +11,10 @@ from GameMessage import *
 # #parser.add_argument("", type=int, help="Starting quantity of dice")
 # args = parser.parse_args()
 
-
+class Action(Enum):
+    INC_BID = 0
+    CALL_LIE = 1
+    
 class Game:
 
     def __init__(self, player_ct: int, dice_per: int):
@@ -22,6 +26,8 @@ class Game:
         self.active_player = Player(dice_per) # index of player who is betting
         self.bet_history = []
         self.dice_totals = {}        
+        self.game_over = 0
+        self.last_action = Action.INC_BID
         self.initialize_game()        
 
     def initialize_game(self):
@@ -58,25 +64,27 @@ class Game:
         
         # if current player called the last one a liar
         if res is None:
+            self.last_action = Action.CALL_LIE
             q,f = self.last_bet()
             if self.dice_totals.get(f) is None:
                 self.active_player = self.players[self.prev()]
                 self.active_player.remove_die()
-                display_incorrect_liar_call(self.active_player, self.players[self.look_prev()], self.dice_totals, f)
+                #display_incorrect_liar_call(self.active_player, self.players[self.look_prev()], self.dice_totals, f)
                 self.start_new_round()          
             if self.dice_totals[f] >= q:
                 self.active_player = self.players[self.prev()]
                 self.active_player.remove_die()
-                display_incorrect_liar_call(self.active_player, self.players[self.look_prev()], self.dice_totals, f)
+                #display_incorrect_liar_call(self.active_player, self.players[self.look_prev()], self.dice_totals, f)
                 self.start_new_round()                
             else:
-                display_correct_liar_call(self.active_player, self.players[self.look_prev()], self.dice_totals, f)
+                #display_correct_liar_call(self.active_player, self.players[self.look_prev()], self.dice_totals, f)
                 self.active_player = self.players[self.prev()]
                 self.active_player.remove_die()
                 if self.active_player.dice == 0:
                     self.remove_player(self.active_player)
                 self.start_new_round()
         else:
+            self.last_action = Action.INC_BID
             self.update_bet_history(res)
             self.next()
             self.continue_round(self.last_bet()[0], self.last_bet()[1])
@@ -135,6 +143,14 @@ class Game:
 
     def end_game(self):
         print(f'{self.players[0]} wins.')
+
+    # represent the dice that player cannot see as an array of ints
+    def hidden_dice(self, player):
+        hd = []
+        for p in self.players:
+            if self.active_player != p:
+                hd.append(p.NUMDICE)
+        return hd
 
 # start a game with 3 people and 5 dice
 Game(3, 5)
