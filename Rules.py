@@ -1,3 +1,4 @@
+import torch
 def is_valid_bet(qty, last_qty, face_val, last_face_val):
     if (qty < last_qty):
         return False

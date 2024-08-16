@@ -1,7 +1,8 @@
 import random
 from Rules import is_valid_bet
 from GameMessage import display_dice
-from StartRound import Action
+from Action import Action
+
 names = ['Alex', 'Bob', 'Charlie', 'Denise', 'Ellyn', 'Frank', 'George', 'Hugh', 'InteractivRobot', 'John', 'Kristin', 'Leeroy', 'Marco', 'Nate', 'Orville', 'Parm', 'Quincy', 'Roger', 'Scott', 'TJ', 'Usher', 'Victor', 'Winston', 'Sir Xylophone', 'Yvette', 'Zach']
 
 class Player:
@@ -9,16 +10,15 @@ class Player:
         self.NUMDICE = dice        
         self.name = names[random.randrange(len(names))]
         self.active = 1
-        self.rolls = []
-        self._prev, self._next = None, None
-        
+        self.rolls = []        
+        self.last_action = Action.INC_BID
     
     # generate dice
     def roll(self):
         self.rolls = []
         for i in range(self.NUMDICE):
             self.rolls.append(random.randrange(1,6))
-        print(f'{self.name}: {self.rolls}')
+        #print(f'{self.name}: {self.rolls}')
                 
     def get_qty_bet(self):
         print("How many dice")
@@ -67,6 +67,4 @@ class Player:
         return self.rolls
     
     def remove_die(self):
-        self.NUMDICE -= 1
-        return self._prev
-    
+        self.NUMDICE -= 1        
