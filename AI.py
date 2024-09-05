@@ -28,17 +28,21 @@ class Agent:
         self.model  = LinearNet(11, 256, 10)
         self.trainer = Trainer(self.model, learn_rate=LEARN_RATE, gamma=self.gamma)
         self.state = np.array([])
-
+    # rather than representing every state, we seek to derive optimal play by piggybacking 
+    # off of extremes
+    
+    def derive_extremes(self):
+        pass
     # TODO: make hidden dice relative to current players position (e.g. if the next player has 2 dice, the first element should be 2)
     def get_state(self, game):
         bet_hist_len = len(game.bet_history)
         hidden_dice = game.hidden_dice()
         visible_dice_ct = len(game.active_player.rolls)
-        visible_dice = game.active_player.rolls
+        visible_dice = game.active_player. rolls
         active_players = game.player_ct
         last_action = game.last_action
 
-        self.state = [self.ruleset, bet_hist_len, visible_dice_ct, active_players, last_action.value]
+        self.state = [bet_hist_len, visible_dice_ct, active_players, last_action.value]
 
 
         for d in hidden_dice:
