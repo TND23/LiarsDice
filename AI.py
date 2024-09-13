@@ -1,110 +1,105 @@
 from Rules import *
 import torch
 from collections import deque
-from StartRound import Game
 import numpy as np 
 import random
 from model import LinearNet, Trainer
 from scipy import stats
+from itertools import combinations_with_replacement
+from Action import *
+from const import *
 
-MAX_MEM = 100_000
-BATCH_SIZE = 2**6
-LEARN_RATE = 0.01
-
-RULE_IDX = 0
-BET_HIST_IDX = 1
-VISIBLE_DICE_CT_IDX = 2
-ACTIVE_PLAYER_CT_IDX = 3
-LAST_ACTION_IDX = 4
-
+q_vals = np.zeros
 
 class Agent:
-    def __init__(self, ruleset):
+    def __init__(self, p_index):
         self.memory = deque(maxlen=MAX_MEM)
-        self.n_games = 0
-        self.epsilon = 0 # control randomness
+        # self.n_games = 0
+        # hard coding as 5 dice per agent for now
+        self.NUMDICE = 5
+        self.epsilon = 200 
         self.gamma = 0.5
-        self.ruleset = ruleset
         self.model  = LinearNet(11, 256, 10)
         self.trainer = Trainer(self.model, learn_rate=LEARN_RATE, gamma=self.gamma)
-        self.state = np.array([])
-    # rather than representing every state, we seek to derive optimal play by piggybacking 
-    # off of extremes
-    
-    def derive_extremes(self):
-        pass
-    # TODO: make hidden dice relative to current players position (e.g. if the next player has 2 dice, the first element should be 2)
-    def get_state(self, game):
-        bet_hist_len = len(game.bet_history)
-        hidden_dice = game.hidden_dice()
-        visible_dice_ct = len(game.active_player.rolls)
-        visible_dice = game.active_player. rolls
-        active_players = game.player_ct
-        last_action = game.last_action
-
-        self.state = [bet_hist_len, visible_dice_ct, active_players, last_action.value]
-
-
-        for d in hidden_dice:
-            self.state.append(d)
-        self.state += [visible_dice_ct]
-
-        for d in visible_dice:
-                    self.state.append(d)
-
-        if bet_hist_len > 0:
-            for i in range(bet_hist_len):
-                self.state.append(game.bet_history[i][0])
-                self.state.append(game.bet_history[i][1])
-        
-        
-        return np.array(self.state)
+        self.rolls = np.array([]) # private state
+        self.reward = 0
+        self.p_index = p_index
 
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
+ 
+    def get_action(self, pub_state, player_ct):
+        #self.epsilon = 80 - self.n_games
+        if pub_state[LAST_ACTION_IDX] in (Action.INC_BID, Action.NONE):
+            bid = self.perform_bid_action(pub_state, player_ct)
+            return bid
 
-    def train_memory(self):
-        pass
-
-    def train_short_memory(self):        
-        pass
-        
-    def get_action(self, state):
-        self.epsilon = 80 - self.n_games
-        hist = []
-        for i in range(2, 2 + (self.state[BET_HIST_IDX] * 2)):
-            hist.append(self.state[i])
-        
-        bid_type = -1
-        bid_increment = (0,0)
-        # if first bidder, they cannot call liar
-        if state[BET_HIST_IDX] == 0:
-            bid_type = 0
-
-        # chance to use baked-in strategy        
-        if random.randint(0,200) < self.epsilon:
-            bid_type = random.randint(0,2)
-            # increment somewhere between 1, but go no larger than the total number of dice for q
-            if bid_type == 1:
-                return None
-            else:
-                bid_increment[0] = random.randint(1, min(hist[-2] + 2, state[VISIBLE_DICE_CT_IDX]+ self._hidden_dice_total(state)))
-                bid_increment[1] = self._determine_face_bet(hist, self._visible_dice(state))
-                return bid_increment
+    def roll(self):
+        self.rolls = []
+        for _ in range(self.NUMDICE):
+            self.rolls.append(random.randrange(1,6))
+            
+    def perform_bid_action(self, pub_state, player_ct):
+        initial_bid = self._is_initial_bid(pub_state)
+        hist = [] if initial_bid else [i for i in enumerate(pub_state[pub_state[BET_HIST_IDX]+1:-player_ct])]
+        bid_increment = [0, 0]
+        # chance to use baked-in strategy (always do this for now)
+        #if random.randint(0,200) < self.epsilon:
+            # if you can call a player a liar (i.e. there is a previous call that can be reacted to, chacne to call lie)
+        # increment somewhere between 1, but go no larger than the total number of dice for q
+        if (bid_increment[0] >= pub_state[TOTAL_DICE_IDX] or self.feeling_feisty()) and initial_bid == False:
+            return LIE_TUPLE
+        if initial_bid:
+            bid_increment[0] = random.randint(1, pub_state[TOTAL_DICE_IDX])
+            bid_increment[1] = random.randint(1,7)
         else:
-            state0 = torch.tensor(state)
-            pred = self.model(state0)
-            if bid_type == 1:
-                return None
-            else:
-                bid_res = torch.argmax(pred).item()
-                return bid_res
+            bid_increment[0] = random.randint(1, min(hist[-2] + 2, pub_state[TOTAL_DICE_IDX]))
+            bid_increment[1] = self._determine_face_bet(hist, self.rolls)
+        return tuple(bid_increment)
+        # else:
+        #     state0 = torch.tensor(pub_state)
+        #     pred = self.model(state0)
+        #     if bid_type == 1:
+        #         return None
+        #     else:
+        #         bid_res = torch.argmax(pred).item()
+        #         return bid_res
+    
+    def _is_initial_bid(self, pub_state):
+        return pub_state[BET_HIST_IDX] == 0
+
+    def feeling_feisty(self):
+        return random.randint(1,100) < 33
+
+    # create q table private state component
+    def _all_rolls(self, player):
+        dice = player.NUMDICE
+        # hard coding 6 dice for now
+        possible_d_rolls = list(range(1,7))
+        return list(combinations_with_replacement(possible_d_rolls, dice))
+    # hard coding 6 sided dice for now
+    def _all_actions(self, last_bet, global_dice_ct):
+        res = []
+        if last_bet:
+            res.append(LIE_TUPLE)
+            q = last_bet[0]
+            f = last_bet[1]
+            for x in range(f,7):
+                res.append((q,x))
+            for q2 in range(q+1,global_dice_ct+1):
+                for f2 in range(1,7):
+                    res.append(q2,f2)
+        else:
+            for q2 in range(1,global_dice_ct+1):
+                for f2 in range(1,7):
+                    res.append(q2,f2)
+        return res
 
     def _determine_face_bet(self, hist, visible_dice):
         face_bets = []
         for i in range(0, len(hist), step=2):
             face_bets.append(hist[i])
- 
+
         seed = random.randint(0,100)
         if seed < 10:
             return random.randint(1,6)
@@ -115,21 +110,23 @@ class Agent:
         else:
             return stats.mode(face_bets)
     
-    def _hidden_dice_total(self, state):
-        return sum(state[LAST_ACTION_IDX+1:LAST_ACTION_IDX+state[ACTIVE_PLAYER_CT_IDX]])
-   
-    def _visible_dice(self, state):
-        offset = LAST_ACTION_IDX + state[ACTIVE_PLAYER_CT_IDX]
-        dice_ct = state[VISIBLE_DICE_CT_IDX]
-        dice = state[offset:offset + 1 + dice_ct]
-        return dice
-    
-def train():
-    agent = Agent(0)
-    game = Game(2,5,1)
-    prev_state = agent.get_state(game)
-    print(prev_state)
-    
+    def remove_die(self):
+        self.NUMDICE -= 1   
 
-if __name__ == '__main__':
-    train()
+    def get_rolls(self):
+        return self.rolls
+    # TODO section
+    
+    # rather than representing every state, we seek to derive optimal play by piggybacking 
+    # off of extremes    
+    def derive_extremes(self):
+        pass
+    
+    def calc_reward(self):
+        pass
+
+    def train_memory(self):
+        pass
+
+    def train_short_memory(self):        
+        pass

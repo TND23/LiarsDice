@@ -92,7 +92,7 @@ class Game:
             self.start_new_round()                
         else:
             #display_correct_liar_call(self.active_player, self.players[self.look_prev()], self.dice_totals, f)
-            self.active_player = self.players[self.prev()]
+            self.players[self.look_prev()].reward
             self.active_player.remove_die()
             if self.active_player.dice == 0:
                 self.remove_player(self.active_player)
