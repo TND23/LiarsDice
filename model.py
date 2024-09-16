@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import os
 
-class LinearNet(nn.Module):
+class Linear_QNet(nn.Module):
     def __init__(self, input, hidden, output):
         super().__init__()
         self.linearA = nn.Linear(input, hidden)

@@ -4,6 +4,7 @@
 # import torch.nn.functional as F
 from aigame import AIGame
 from AI import *
+from Action import *
 #import numpy as np
 # state = [0,5,3,0,5,5,5,6,6,5,3,1]
 # q_table = {(0,1): .2, (0,0): .3, (1,0) : .2, (1,1) : .8}
@@ -24,9 +25,11 @@ def train():
     agents = game.players
     agent = agents[0]
     pub_state = game.pub_state
-    #prev_state = agent.get_state(game)
-    bid = agent.get_action(pub_state, game.player_ct)
-    print(bid)
+    while game.player_ct > 1:
+        #prev_state = agent.get_state(game)
+        bid = agent.get_action(pub_state)
+        if bid == LIE_TUPLE:
+            game.start_round()
 
 if __name__ == '__main__':
     train()

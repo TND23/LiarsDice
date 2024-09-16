@@ -1,8 +1,7 @@
 import random
 from Rules import *
 from AI import Agent
-from GameMessage import *
-from Action import Action
+from Action import *
 import itertools
 from const import * 
 #import argparse
@@ -48,6 +47,7 @@ class AIGame:
             p.roll()
         self._sum_dice()
         self.active_player = self.players[0]
+        self.set_pub_state()
         while self.game_over == 0:
             self.step()
         
@@ -55,29 +55,27 @@ class AIGame:
         raised_to = self.active_player.get_action(self.last_bet()[0], self.last_bet()[1])       
         # if current player called the last one a liar
         if raised_to is Action.CALL_LIE:
-            self.resolve_liar_call()
+            self.apply_liar_call()
         else:
-            self.update_bet_history(raised_to)
-            self.active_player = self.players[self.next()]
+            self.apply_bid(raised_to)
 
-    def resolve_bid(self, raised_to):
+    def apply_bid(self, raised_to):
         self.update_bet_history(raised_to)
-        self.next()
-        self.step(self.last_bet()[0], self.last_bet()[1])
+        self.update_opp_hist(raised_to)
+        self.active_player = self.players[self.next()]
+        return self.pub_state
 
-    def resolve_liar_call(self):
+    def apply_liar_call(self):
         q,f = self.last_bet()
         if self.dice_totals.get(f) is None:
             self.active_player.reward += self.active_player.discount * 5            
             self.active_player = self.players[self.prev()]
             self.active_player.remove_die()
-            self.start_round()          
         if self.dice_totals[f] >= q:
             self.active_player.reward += self.active_player.discount * 5
             self.active_player = self.players[self.prev()]
             self.active_player.reward -= self.active_player.discount * 5
             self.active_player.remove_die()
-            self.start_round()                
         else:
             self.players[self.look_prev()].reward  += self.players[self.look_prev()].discount * 5
             self.active_player.remove_die()
@@ -85,8 +83,9 @@ class AIGame:
             if self.active_player.dice == 0:
                 self.active_player.reward = -10
                 self.remove_player(self.active_player)
-            self.start_round()
-
+        self.pub_state.append(LIE_TUPLE)
+        return self.pub_state
+    
     def next(self):
         self.IDX = (self.IDX + 1) % self.player_ct
         return self.IDX
@@ -124,6 +123,11 @@ class AIGame:
         self.pub_state.append(qv[1])
         self.pub_state[BET_HIST_IDX] += 1
     
+    def update_opp_hist(self, qf):
+        for p in self.players:
+            if p != self.active_player:
+                p.update_opp_bids(qf)
+
     def reset_bet_history(self):
         self.bet_history = []
         self.pub_state[BET_HIST_IDX] = 0
@@ -140,7 +144,8 @@ class AIGame:
       
     def remove_player(self, player):
         self.players.remove(player)
-        self.player_ct -= 1 # Eliminate this variable?
+        self.player_ct -= 1 
+        
         if self.check_game_over():
             self.end_game()
         else:
@@ -155,7 +160,6 @@ class AIGame:
         dice_ct = 0
         for x in self.players:
             dice_ct += x.NUMDICE
-        #dice_ct = sum([x for x in self.players.])
         self.pub_state.append(dice_ct)
         self.pub_state.append(self.hidden_dice())
     

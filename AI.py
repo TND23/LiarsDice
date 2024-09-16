@@ -3,7 +3,7 @@ import torch
 from collections import deque
 import numpy as np 
 import random
-from model import LinearNet, Trainer
+from model import Linear_QNet, Trainer
 from scipy import stats
 from itertools import combinations_with_replacement
 from Action import *
@@ -14,28 +14,32 @@ q_vals = np.zeros
 class Agent:
     def __init__(self, p_index):
         self.memory = deque(maxlen=MAX_MEM)
-        # self.n_games = 0
+        self.n_games = 0
         # hard coding as 5 dice per agent for now
         self.NUMDICE = 5
         self.epsilon = 200 
-        self.gamma = 0.5
-        self.model  = LinearNet(11, 256, 10)
+        self.gamma = 0.9
+        self.model  = Linear_QNet(11, 256, 10)
         self.trainer = Trainer(self.model, learn_rate=LEARN_RATE, gamma=self.gamma)
         self.rolls = np.array([]) # private state
         self.reward = 0
         self.p_index = p_index
+        self.bids = []
+        self.opp_bids = []
 
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
  
-    def get_action(self, pub_state, player_ct):
+    def get_action(self, pub_state):
         #self.epsilon = 80 - self.n_games
+        player_ct = pub_state[ACTIVE_PLAYER_CT_IDX]
         if pub_state[LAST_ACTION_IDX] in (Action.INC_BID, Action.NONE):
             bid = self.perform_bid_action(pub_state, player_ct)
             return bid
 
     def roll(self):
         self.rolls = []
+        self.bids = []
         for _ in range(self.NUMDICE):
             self.rolls.append(random.randrange(1,6))
             
@@ -55,6 +59,8 @@ class Agent:
         else:
             bid_increment[0] = random.randint(1, min(hist[-2] + 2, pub_state[TOTAL_DICE_IDX]))
             bid_increment[1] = self._determine_face_bet(hist, self.rolls)
+            self.bids.append(bid_increment[0])
+            self.bids.append(bid_increment[1])
         return tuple(bid_increment)
         # else:
         #     state0 = torch.tensor(pub_state)
@@ -65,11 +71,22 @@ class Agent:
         #         bid_res = torch.argmax(pred).item()
         #         return bid_res
     
+    def perform_sample_action(self, last_bet, global_dice_ct):
+        options = self._all_actions(last_bet, global_dice_ct)
+        return random.sample(options,1)[0]
+
     def _is_initial_bid(self, pub_state):
         return pub_state[BET_HIST_IDX] == 0
 
     def feeling_feisty(self):
         return random.randint(1,100) < 33
+
+    # find the normalized behavior of opponents
+    def normalized_opp_actions(self):
+        normalized_bids = np.array([])
+        if len(self.opp_bids) == 0:
+            return normalized_bids
+        return self.opp_bids / np.linalg.norm(self.opp_bids,axis=-1)[:,np.newaxis]
 
     # create q table private state component
     def _all_rolls(self, player):
@@ -112,6 +129,9 @@ class Agent:
     
     def remove_die(self):
         self.NUMDICE -= 1   
+
+    def update_opp_bids(self, qf):
+        self.opp_bids.append(qf)
 
     def get_rolls(self):
         return self.rolls
