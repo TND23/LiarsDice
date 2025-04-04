@@ -1,40 +1,45 @@
 from enum import Enum
+from dataclasses import dataclass
+from typing import Optional
 
 class ActionType(Enum):
-    INC_BID = 0
+    BID = 0
     CALL_LIE = 1
 
 # Add class that defines what a Bid is. The tuple implementation has proven difficult to work with.
 @dataclass(frozen=True)
 class Bid:
-    def __init__(self, qty, face_val):
-        self.qty = qty
-        self.face_val = face_val
-        
+    quantity: int
+    face_value: int
+
+    def __post_init__(self):
+        if not (1 <= self.quantity <= 30):  # Reasonable max for total dice
+            raise ValueError(f"Invalid quantity: {self.quantity}")
+        if not (1 <= self.face_value <= 6):
+            raise ValueError(f"Invalid face value: {self.face_value}")
+
 # Add a second action class that contains action and Bid.
 @dataclass(frozen=True)
 class Action:
     type: ActionType
     bid: Optional[Bid] = None
 
+    @classmethod
+    def make_bid(cls, quantity: int, face_value: int) -> 'Action':
+        return cls(ActionType.BID, Bid(quantity, face_value))
 
     @classmethod
-    def make_bid(cls, quantity: int, face_val: int):
-        return cls(ActionType.INC_BID, Bid(quantity, face_val))
-
-    @classmethod
-    def call_liar(cls):
+    def call_liar(cls) -> 'Action':
         return cls(ActionType.CALL_LIE)
 
-    def is_bid(self):
-        return self.type == ActionType.INC_BID
+    def is_bid(self) -> bool:
+        return self.type == ActionType.BID
 
-    def is_call_liar(self):
+    def is_call_liar(self) -> bool:
         return self.type == ActionType.CALL_LIE
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.is_bid():
-            return f"Action: Bid({self.bid.quantity}, {self.bid.face_val})"
-        else:
-            return "Action: Call Liar"
+            return f"Bid({self.bid.quantity}, {self.bid.face_value})"
+        return "Call Liar"
 
