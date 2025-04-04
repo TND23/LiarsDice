@@ -4,7 +4,7 @@ from GameMessage import display_dice
 from Action import Action
 import itertools
 
-names = ['Alex', 'Bob', 'Charlie', 'Denise', 'Ellyn', 'Frank', 'George', 'Hugh', 'InteractivRobot', 'John', 'Kristin', 'Leeroy', 'Marco', 'Nate', 'Orville', 'Parm', 'Quincy', 'Roger', 'Scott', 'TJ', 'Usher', 'Victor', 'Winston', 'Sir Xylophone', 'Yvette', 'Zach']
+names = ['Alex', 'Bob', 'Charlie', 'Denise', 'Ellyn', 'Frank', 'George', 'Hugh', 'InteractivRobot', 'John', 'Kaitlyn', 'Leeroy', 'Marco', 'Nate', 'Orville', 'Parm', 'Quincy', 'Roger', 'Scott', 'TJ', 'Usher', 'Victor', 'Winston', 'Sir Xylophone', 'Yvette', 'Zach']
 
 # Agent
 class Player:
@@ -13,7 +13,7 @@ class Player:
         self.name = names[random.randrange(len(names))]
         self.active = 1
         self.rolls = []        
-        self.last_action = Action.INC_BID
+        self.last_action = ActionType.INC_BID
         self.ret = 0 # sum of rewards
         self.reward = 0
         self.discount = .1
@@ -51,10 +51,10 @@ class Player:
         selection = -1
         while valid_selection == False:
             selection = int(input())
-            if selection == Action.INC_BID or selection == Action.CALL_LIE:
+            if selection == ActionType.INC_BID or selection == ActionType.CALL_LIE:
                 valid_selection = True
         # 1 == increment bet
-        if selection == Action.INC_BID:
+        if selection == ActionType.INC_BID:
             self.get_action(state)
         # anything else == call
         else:
