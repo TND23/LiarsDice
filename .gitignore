@@ -1,4 +1,9 @@
 todos.txt
 test/
 model/
-_pycache_/
+__pycache__/
+__pycache__/Action.cpython-311.pyc
+__pycache__/AI.cpython-311.pyc
+__pycache__/aigame.cpython-311.pyc
+__pycache__/const.cpython-311.pyc
+__pycache__/model.cpython-311.pyc
