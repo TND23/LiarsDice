@@ -3,7 +3,7 @@
 
 Goal: Create a flexible AI for the liar's dice game using a modified neural fictitious self-play implementation.
 
-Optimal play for a two-player game of liar's dice has already been implemented by thomasahle in his liar's dice repo. The goal of this project is to implement a learning approach that can generate models to play either at a specified sub-optimal level, which will be limited by limiting the set of actions available in the action-value function.
+Optimal play for a two-player game of liar's dice has already been implemented by thomasahle in his liar's dice repo. The goal of this project is to implement a learning approach that can generate models to play at a specified sub-optimal level which will be obtained by limiting the set of actions available in the action-value function.
 
 ## Motivation
 
