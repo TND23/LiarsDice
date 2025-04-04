@@ -1,152 +1,129 @@
-from Rules import *
-import torch
-from collections import deque
-import numpy as np 
+import numpy as np
+from Action import Action, ActionType
 import random
-from model import Linear_QNet, Trainer
-from scipy import stats
-from itertools import combinations_with_replacement
-from Action import *
 from const import *
+from itertools import combinations_with_replacement
+from typing import List, Dict, Tuple, Any
 
-q_vals = np.zeros
-
-class Agent:
-    def __init__(self, p_index):
-        self.memory = deque(maxlen=MAX_MEM)
-        self.n_games = 0
-        # hard coding as 5 dice per agent for now
-        self.NUMDICE = 5
-        self.epsilon = 200 
-        self.gamma = 0.9
-        self.model  = Linear_QNet(11, 256, 10)
-        self.trainer = Trainer(self.model, learn_rate=LEARN_RATE, gamma=self.gamma)
-        self.rolls = np.array([]) # private state
-        self.reward = 0
+class AI:
+    def __init__(self, p_index: int):
+        self.learning_rate = 0.1
+        self.discount_factor = 0.9
+        self.epsilon = 0.2  # Exploration rate
+        self.q_table: Dict[Tuple, Dict[str, float]] = {}  # State-action value table
+        self.NUMDICE = 5  # Starting number of dice
+        self.rolls: List[int] = []  # Current dice
         self.p_index = p_index
-        self.bids = []
-        self.opp_bids = []
+        self.reward = 0
+        self.name = f"AI_{p_index}"
+        
+    def _get_state_key(self, pub_state: List[Any]) -> Tuple:
+        """Convert game state to a hashable key for Q-table"""
+        state_key = (
+            tuple(sorted(self.rolls)),  # Current dice
+            tuple(pub_state[-2:]) if pub_state[BET_HIST_IDX] > 0 else None,  # Previous bid
+            pub_state[TOTAL_DICE_IDX],  # Total dice in game
+            tuple(pub_state[TOTAL_DICE_IDX+1:])  # Other players' dice counts
+        )
+        return state_key
 
-    def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
- 
-    def get_action(self, pub_state):
-        #self.epsilon = 80 - self.n_games
-        player_ct = pub_state[ACTIVE_PLAYER_CT_IDX]
-        if pub_state[LAST_ACTION_IDX] in (Action.INC_BID, Action.NONE):
-            bid = self.perform_bid_action(pub_state, player_ct)
-            return bid
+    def _get_valid_actions(self, pub_state: List[Any]) -> List[Action]:
+        """Get list of valid actions given the current state"""
+        actions: List[Action] = []
+        total_dice = pub_state[TOTAL_DICE_IDX]
+        
+        # Can only call lie if there's a previous bid
+        if pub_state[BET_HIST_IDX] > 0:
+            actions.append(Action.call_liar())
+        
+        # Get previous bid if it exists
+        prev_bid = None
+        if pub_state[BET_HIST_IDX] > 0:
+            prev_bid = (pub_state[-2], pub_state[-1])
+        
+        # Add possible bid actions
+        if prev_bid:
+            # Must increase quantity or face value
+            start_quantity = prev_bid[0]
+            start_face = prev_bid[1]
+            
+            # Same quantity, higher face
+            for face in range(start_face + 1, 7):
+                actions.append(Action.make_bid(start_quantity, face))
+            
+            # Higher quantity
+            for quantity in range(start_quantity + 1, total_dice + 1):
+                for face in range(1, 7):
+                    actions.append(Action.make_bid(quantity, face))
+        else:
+            # First bid - any valid combination
+            for quantity in range(1, total_dice + 1):
+                for face in range(1, 7):
+                    actions.append(Action.make_bid(quantity, face))
+                    
+        return actions
+
+    def get_action(self, pub_state: List[Any]) -> Action:
+        """Choose action using epsilon-greedy policy"""
+        state_key = self._get_state_key(pub_state)
+        valid_actions = self._get_valid_actions(pub_state)
+        
+        # Exploration
+        if random.random() < self.epsilon:
+            return random.choice(valid_actions)
+            
+        # Exploitation
+        if state_key not in self.q_table:
+            self.q_table[state_key] = {str(action): 0.0 for action in valid_actions}
+            
+        # Get action with highest Q-value
+        q_values = self.q_table[state_key]
+        max_q = max(q_values.values())
+        best_actions = [action for action, q in q_values.items() if q == max_q]
+        chosen_action = eval(random.choice(best_actions))
+        
+        return chosen_action
+
+    def update_q_value(self, state: List[Any], action: Action, reward: float, next_state: List[Any]):
+        """Update Q-value for state-action pair"""
+        state_key = self._get_state_key(state)
+        next_state_key = self._get_state_key(next_state)
+        
+        # Initialize Q-values if not exists
+        if state_key not in self.q_table:
+            valid_actions = self._get_valid_actions(state)
+            self.q_table[state_key] = {str(a): 0.0 for a in valid_actions}
+            
+        if next_state_key not in self.q_table:
+            valid_actions = self._get_valid_actions(next_state)
+            self.q_table[next_state_key] = {str(a): 0.0 for a in valid_actions}
+        
+        # Get max Q-value for next state
+        next_max_q = max(self.q_table[next_state_key].values()) if self.q_table[next_state_key] else 0
+        
+        # Update Q-value
+        current_q = self.q_table[state_key][str(action)]
+        new_q = current_q + self.learning_rate * (reward + self.discount_factor * next_max_q - current_q)
+        self.q_table[state_key][str(action)] = new_q
 
     def roll(self):
+        """Roll dice for new round"""
         self.rolls = []
-        self.bids = []
         for _ in range(self.NUMDICE):
-            self.rolls.append(random.randrange(1,6))
-            
-    def perform_bid_action(self, pub_state, player_ct):
-        initial_bid = self._is_initial_bid(pub_state)
-        hist = [] if initial_bid else [i for i in enumerate(pub_state[pub_state[BET_HIST_IDX]+1:-player_ct])]
-        bid_increment = [0, 0]
-        # chance to use baked-in strategy (always do this for now)
-        #if random.randint(0,200) < self.epsilon:
-            # if you can call a player a liar (i.e. there is a previous call that can be reacted to, chacne to call lie)
-        # increment somewhere between 1, but go no larger than the total number of dice for q
-        if (bid_increment[0] >= pub_state[TOTAL_DICE_IDX] or self.feeling_feisty()) and initial_bid == False:
-            return LIE_TUPLE
-        if initial_bid:
-            bid_increment[0] = random.randint(1, pub_state[TOTAL_DICE_IDX])
-            bid_increment[1] = random.randint(1,7)
-        else:
-            bid_increment[0] = random.randint(1, min(hist[-2] + 2, pub_state[TOTAL_DICE_IDX]))
-            bid_increment[1] = self._determine_face_bet(hist, self.rolls)
-            self.bids.append(bid_increment[0])
-            self.bids.append(bid_increment[1])
-        return tuple(bid_increment)
-        # else:
-        #     state0 = torch.tensor(pub_state)
-        #     pred = self.model(state0)
-        #     if bid_type == 1:
-        #         return None
-        #     else:
-        #         bid_res = torch.argmax(pred).item()
-        #         return bid_res
-    
-    def perform_sample_action(self, last_bet, global_dice_ct):
-        options = self._all_actions(last_bet, global_dice_ct)
-        return random.sample(options,1)[0]
+            self.rolls.append(random.randrange(1, 7))
 
-    def _is_initial_bid(self, pub_state):
-        return pub_state[BET_HIST_IDX] == 0
-
-    def feeling_feisty(self):
-        return random.randint(1,100) < 33
-
-    # find the normalized behavior of opponents
-    def normalized_opp_actions(self):
-        normalized_bids = np.array([])
-        if len(self.opp_bids) == 0:
-            return normalized_bids
-        return self.opp_bids / np.linalg.norm(self.opp_bids,axis=-1)[:,np.newaxis]
-
-    # create q table private state component
-    def _all_rolls(self, player):
-        dice = player.NUMDICE
-        # hard coding 6 dice for now
-        possible_d_rolls = list(range(1,7))
-        return list(combinations_with_replacement(possible_d_rolls, dice))
-    # hard coding 6 sided dice for now
-    def _all_actions(self, last_bet, global_dice_ct):
-        res = []
-        if last_bet:
-            res.append(LIE_TUPLE)
-            q = last_bet[0]
-            f = last_bet[1]
-            for x in range(f,7):
-                res.append((q,x))
-            for q2 in range(q+1,global_dice_ct+1):
-                for f2 in range(1,7):
-                    res.append(q2,f2)
-        else:
-            for q2 in range(1,global_dice_ct+1):
-                for f2 in range(1,7):
-                    res.append(q2,f2)
-        return res
-
-    def _determine_face_bet(self, hist, visible_dice):
-        face_bets = []
-        for i in range(0, len(hist), step=2):
-            face_bets.append(hist[i])
-
-        seed = random.randint(0,100)
-        if seed < 10:
-            return random.randint(1,6)
-        elif seed < 50:
-            return stats.mode(visible_dice)
-        elif seed < 60:
-            return np.median(face_bets)
-        else:
-            return stats.mode(face_bets)
-    
     def remove_die(self):
-        self.NUMDICE -= 1   
+        """Remove one die when losing"""
+        self.NUMDICE -= 1
+        if self.rolls:
+            self.rolls.pop()
 
-    def update_opp_bids(self, qf):
-        self.opp_bids.append(qf)
-
-    def get_rolls(self):
-        return self.rolls
-    # TODO section
-    
-    # rather than representing every state, we seek to derive optimal play by piggybacking 
-    # off of extremes    
-    def derive_extremes(self):
-        pass
-    
-    def calc_reward(self):
-        pass
-
-    def train_memory(self):
-        pass
-
-    def train_short_memory(self):        
-        pass
+    def update_reward(self, reward: float):
+        """Update the agent's reward"""
+        self.reward = reward
+        
+    def update_opp_bids(self, bid: Tuple[int, int]):
+        """Track opponent bids for learning"""
+        if isinstance(bid, tuple) and len(bid) == 2:
+            # Only track valid bids (quantity, face)
+            self.epsilon = max(0.01, self.epsilon * 0.995)  # Decay exploration rate
