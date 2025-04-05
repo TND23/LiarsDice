@@ -37,9 +37,29 @@ class Action:
 
     def is_call_liar(self) -> bool:
         return self.type == ActionType.CALL_LIE
-
+    
+    # make readable for debugging / logging
     def __str__(self) -> str:
         if self.is_bid():
-            return f"Bid({self.bid.quantity}, {self.bid.face_value})"
-        return "Call Liar"
+            return f"Action.make_bid({self.bid.quantity}, {self.bid.face_value})"
+        return "Action.call_liar()"
+
+    def __repr__(self) -> str:
+        return self.__str__()
+    
+    # make hashable for Q-table
+    def __hash__(self) -> int:
+        if self.is_bid():
+            return hash((self.type, self.bid.quantity, self.bid.face_value))
+        return hash((self.type,))
+
+    # should I implement less than and greater than?
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Action):
+            return NotImplemented
+        if self.type != other.type:
+            return False
+        if self.is_bid():
+            return self.bid == other.bid
+        return True
 
