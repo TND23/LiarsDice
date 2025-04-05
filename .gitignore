@@ -2,8 +2,5 @@ todos.txt
 test/
 model/
 __pycache__/
-__pycache__/Action.cpython-311.pyc
-__pycache__/AI.cpython-311.pyc
-__pycache__/aigame.cpython-311.pyc
-__pycache__/const.cpython-311.pyc
-__pycache__/model.cpython-311.pyc
+.vscode/settings.json
+*.pyc
