@@ -30,39 +30,7 @@ class AI:
 
     def _get_valid_actions(self, pub_state: List[Any]) -> List[Action]:
         """Get list of valid actions given the current state"""
-        actions: List[Action] = []
-        total_dice = pub_state[TOTAL_DICE_IDX]
-        
-        # Can only call lie if there's a previous bid
-        if pub_state[BET_HIST_IDX] > 0:
-            actions.append(Action.call_liar())
-        
-        # Get previous bid if it exists
-        prev_bid = None
-        if pub_state[BET_HIST_IDX] > 0:
-            prev_bid = (pub_state[-2], pub_state[-1])
-        
-        # Add possible bid actions
-        if prev_bid:
-            # Must increase quantity or face value
-            start_quantity = prev_bid[0]
-            start_face = prev_bid[1]
-            
-            # Same quantity, higher face
-            for face in range(start_face + 1, MAX_FACE_VALUE + 1):
-                actions.append(Action.make_bid(start_quantity, face))
-            
-            # Higher quantity
-            for quantity in range(start_quantity + 1, total_dice + 1):
-                for face in range(MIN_FACE_VALUE, MAX_FACE_VALUE + 1):
-                    actions.append(Action.make_bid(quantity, face))
-        else:
-            # First bid - any valid combination
-            for quantity in range(1, total_dice + 1):
-                for face in range(MIN_FACE_VALUE, MAX_FACE_VALUE + 1):
-                    actions.append(Action.make_bid(quantity, face))
-                    
-        return actions
+        return get_valid_actions(pub_state)
 
     def _action_to_str(self, action: Action) -> str:
         """Convert an action to its string representation for Q-table lookup."""
