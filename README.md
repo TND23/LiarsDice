@@ -8,3 +8,7 @@ Optimal play for a two-player game of liar's dice has already been implemented b
 ## Motivation
 
 The complexity of state and particularly available actions increases exponentially with relation to players and dice. Therefore it is easier to create something that is approximately optimal. Moreover, a computer that plays perfectly may not be particularly engaging for people who play against it, and creating models with some exploitability may make it more enjoyable. 
+
+## Shoutouts
+- https://www.youtube.com/@csprof : great resource for digestible deep learning videos and so much more
+- https://arxiv.org/abs/1603.01121 : original 2016 paper on NSFP
