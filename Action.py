@@ -1,6 +1,7 @@
 from enum import Enum
 from dataclasses import dataclass
 from typing import Optional
+from const import MAX_DICE_PER_PLAYER
 
 class ActionType(Enum):
     BID = 0
@@ -13,10 +14,17 @@ class Bid:
     face_value: int
 
     def __post_init__(self):
-        if not (1 <= self.quantity <= 30):  # Reasonable max for total dice
+        if not (1 <= self.quantity <= MAX_DICE_PER_PLAYER):  # Reasonable max for total dice
+            print(f"Invalid quantity: {self.quantity}")
             raise ValueError(f"Invalid quantity: {self.quantity}")
-        if not (1 <= self.face_value <= 6):
+        if not (1 <= self.face_value <= NUMBER_FACES):
             raise ValueError(f"Invalid face value: {self.face_value}")
+
+    def __lt__(self, other: 'Bid') -> bool:
+        return self.quantity < other.quantity or (self.quantity == other.quantity and self.face_value < other.face_value)
+
+    def __gt__(self, other: 'Bid') -> bool:
+        return self.quantity > other.quantity or (self.quantity == other.quantity and self.face_value > other.face_value)
 
 # Add a second action class that contains action and Bid.
 @dataclass(frozen=True)
@@ -37,8 +45,7 @@ class Action:
 
     def is_call_liar(self) -> bool:
         return self.type == ActionType.CALL_LIE
-    
-    # make readable for debugging / logging
+
     def __str__(self) -> str:
         if self.is_bid():
             return f"Action.make_bid({self.bid.quantity}, {self.bid.face_value})"
@@ -46,14 +53,14 @@ class Action:
 
     def __repr__(self) -> str:
         return self.__str__()
-    
+
     # make hashable for Q-table
     def __hash__(self) -> int:
+        print("hashing action")
         if self.is_bid():
             return hash((self.type, self.bid.quantity, self.bid.face_value))
         return hash((self.type,))
 
-    # should I implement less than and greater than?
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Action):
             return NotImplemented
