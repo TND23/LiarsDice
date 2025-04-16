@@ -143,8 +143,8 @@ class StateEncoder:
             if not isinstance(component, list):
                 component = [component]
             if len(component) > max_size:
-            padded = [len(component)]
-            padded.extend(component)
+                padded = [len(component)]
+                padded.extend(component)
             while len(padded) < max_size:
                 padded.append(0)
             return padded
