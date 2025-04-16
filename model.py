@@ -120,11 +120,12 @@ class AveragePolicyNetwork:
 #TODO: incorporate this into StateManager (?)
 class StateEncoder:
     """Encodes game state into a tensor for neural network input."""
-
+    #TODO: Make GameState the state manager
     @staticmethod
     def encode_state(game_state: GameState, player_index: int) -> torch.Tensor:
         """Convert game state to tensor representation."""
         pub_state = game_state.to_public_state()
+
         #TODO: refactor this back now that debugging complete
         input_vector = []
         vector_BET = (MAX_BET_HISTORY * 2 + 1)
@@ -140,10 +141,10 @@ class StateEncoder:
 
         # ensure component is expected size
         def pad_component(component, max_size, component_descr=""):
+            padded = []
             if not isinstance(component, list):
                 component = [component]
             if len(component) > max_size:
-                padded = [len(component)]
                 padded.extend(component)
             while len(padded) < max_size:
                 padded.append(0)
