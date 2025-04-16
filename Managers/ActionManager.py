@@ -30,7 +30,7 @@ class ActionManager:
 
 
     @no_type_check #stfu
-    def get_valid_actions(self, state: StateManager) -> List[Action]:
+    def get_valid_actions(self, state_manager: StateManager) -> List[Action]:
         """
         Get valid actions for the current game state.
         Works with GameState objects, public state lists, or StateManager.
@@ -43,7 +43,7 @@ class ActionManager:
         # Handle StateManager
 
 
-        game_state = state.get_game_state()
+        game_state = state_manager.get_game_state()
 
         actions = []
         total_dice = game_state.total_dice
