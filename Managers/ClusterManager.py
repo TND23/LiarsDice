@@ -115,7 +115,10 @@ class ClusterManager:
         avg_face = sum(bid[1] for bid in bet_history) / total_bids
 
         # Normalize by total dice
-        norm_quantity = avg_quantity / total_dice
+        if total_dice == 0:
+            norm_quantity = 0
+        else:
+            norm_quantity = avg_quantity / total_dice
         norm_face = avg_face / MAX_FACE_VALUE
 
         # Find closest center
