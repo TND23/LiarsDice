@@ -13,11 +13,11 @@ from Managers.ActionManager import ActionManager
 from datetime import datetime
 # neural network parameters
 hidden = 10
-learn_rate = 0.001
-gamma = 0.99
+learn_rate = LEARN_RATE
+gamma = 0.8
 
+# Q-networks
 
-# f(state) -> {distribution of actions}
 class LiarsDicePolicyNetwork(nn.Module):
     """Policy network."""
 
@@ -206,8 +206,8 @@ class ActionDecoder:
         # TODO: Should pick next best valid action eventually
         # If the selected action is not valid, choose the first valid action
         if action_idx >= len(valid_actions):
-            print(f"Selected action {action_idx} is not valid - choosing first valid action.")
+            #print(f"Selected action {action_idx} is not valid - choosing first valid action.")
             return valid_actions[0]
-
+        #print(action_map[action_idx])
         return action_map[action_idx]
 
