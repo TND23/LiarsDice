@@ -3,6 +3,7 @@ from typing import List, Tuple, Any, no_type_check
 from const import STATE_COMPONENTS
 from Managers.ClusterManager import ClusterManager
 from Action import Action, ActionType
+import copy
 
 # The states are: GameState, PublicState, StateKey
 # The GameState is the internal state of the game.
@@ -69,6 +70,20 @@ class StateManager:
     def get_state_key(self) -> Tuple:
         """Return the state key for Q-table use."""
         return self._state_key
+
+    @no_type_check
+    def get_next_state_key(self, action: Action) -> Tuple:
+        """Return the next state key for Q-table use."""
+        next_state_key = copy.deepcopy(self._state_key)
+        if action.action_type == ActionType.BID: # Append bid to bet history
+            next_state_key[0].append(action.bid.to_tuple())
+            next_state_key[1] = (next_state_key[1] + 1) % len(next_state_key[0]) # Increment current player index
+        elif action.action_type == ActionType.CALL_LIAR:
+            # TODO: resolve liar call and represent that state(?)
+            # if this is done it would mean that the agent would have access to the opponent's dice since it could resolve the liar call.
+            next_state_key[1] = (next_state_key[1] + 1) % len(next_state_key[0]) # Increment current player index
+        return next_state_key
+
     @no_type_check
     #region update state after action taken
     def update_from_action(self, action: Action) -> None:
