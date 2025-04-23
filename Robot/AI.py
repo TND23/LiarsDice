@@ -15,7 +15,7 @@ names = ['Alex', 'Bob', 'Charlie', 'Denise', 'Ellyn', 'Frank', 'George', 'Hugh',
 
 class AI:
     def __init__(self, p_index: int, cluster_manager: ClusterManager, action_manager: ActionManager):
-        self.learning_rate = LEARNING_RATE
+        self.learning_rate = LEARN_RATE
         self.discount_factor = DISCOUNT_FACTOR
         self.epsilon = EPSILON # Exploration rate
         self.q_table: Dict[Tuple, Dict[str, float]] = {}  # State-action value table
@@ -46,12 +46,10 @@ class AI:
 
             # Only initialize if the state key doesn't exist
             if state_key not in self.q_table:
-                # print(f"Initializing new state in Q-table: {state_key}")
                 self.q_table[state_key] = {}
 
             # Only initialize if the action doesn't exist
             if action_str not in self.q_table[state_key]:
-                # print(f"Initializing new action in Q-table: {action_str}")
                 self.q_table[state_key][action_str] = 0.0
 
             action_values[action] = self.q_table[state_key][action_str]
@@ -60,7 +58,6 @@ class AI:
             chosen_action = random.choice(valid_actions)
         else:
             chosen_action = max(action_values.items(), key=lambda x: x[1])[0]
-        print(f"{self.name} chose to: {chosen_action}\n")
 
         return chosen_action
     #TODO: this doesn't work without a proper next state.
