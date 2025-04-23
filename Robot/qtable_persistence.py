@@ -6,6 +6,8 @@ from typing import Dict, Tuple, Any
 import numpy as np
 from datetime import datetime
 
+from sympy import Q
+
 # AI-generated code for persisting Q-tables.
 class QTablePersistence:
 
@@ -36,13 +38,6 @@ class QTablePersistence:
             return b''
 
         bet_history, current_player, total_dice, cluster_method, centers = state_key
-        # print(f"Serializing state key:")
-        # print(f"  bet_history: {bet_history}")
-        # print(f"  current_player: {current_player}")
-        # print(f"  total_dice: {total_dice}")
-        # print(f"  cluster_method: {cluster_method}")
-        # print(f"  centers: {centers}")
-
         parts = []
 
         # Serialize bet history
@@ -111,14 +106,6 @@ class QTablePersistence:
             print("Warning: Attempting to save empty Q-table")
             return
 
-        print("\nSample of states being saved:")
-        for i, (key, actions) in enumerate(q_table.items()):
-            if i >= 3:  # Only show first 3 states
-                break
-            print(f"  State {i + 1}:")
-            print(f"    Key: {key}")
-            print(f"    Actions: {actions}")
-
         metadata = {
             'table_id': table_id,
             'timestamp': datetime.now().isoformat(),
@@ -130,7 +117,6 @@ class QTablePersistence:
         # Serialize state keys and action values
         state_entries = []
         for state_key, actions in q_table.items():
-            print(f"\nSerializing state key: {state_key}")
             key_bytes = self._serialize_state_key(state_key)
             if not key_bytes:
                 print("  Warning: Failed to serialize state key, skipping")
@@ -138,11 +124,9 @@ class QTablePersistence:
 
             action_values = []
             for action_str, value in actions.items():
-                print(f"  Serializing action: {action_str} = {value}")
                 action_bytes = action_str.encode('utf-8')
                 value_bytes = struct.pack('>d', value)
                 action_values.append((action_bytes, value_bytes))
-
             state_entries.append((key_bytes, action_values))
 
         # Update metadata with sizes
@@ -151,11 +135,9 @@ class QTablePersistence:
             if state_entries[0][1]:
                 metadata['action_value_size'] = len(state_entries[0][1][0][0]) + 8
 
-        print(f"\nSaving metadata: {metadata}")
         with open(self._get_metadata_path(table_id), 'w') as f:
             json.dump(metadata, f, indent=2)
 
-        print(f"\nSaving binary data to {self._get_values_path(table_id)}")
         with open(self._get_values_path(table_id), 'wb') as f:
             f.write(struct.pack('>I', len(state_entries)))
 
@@ -176,41 +158,26 @@ class QTablePersistence:
         metadata_path = self._get_metadata_path(table_id)
         values_path = self._get_values_path(table_id)
 
-        # print(f"Looking for files:")
-        # print(f"  Metadata: {metadata_path} (exists: {metadata_path.exists()})")
-        # print(f"  Values: {values_path} (exists: {values_path.exists()})")
 
         if not metadata_path.exists() or not values_path.exists():
-            # print("Q-table files not found, returning empty table")
+            print("Q-table files not found, returning empty table")
             return {}
-
-        with open(metadata_path, 'r') as f:
-            metadata = json.load(f)
-            # print(f"\nMetadata loaded:")
-            # print(f"  Table ID: {metadata['table_id']}")
-            # print(f"  Timestamp: {metadata['timestamp']}")
-            # print(f"  Number of states: {metadata['num_states']}")
 
         q_table = {}
         with open(values_path, 'rb') as f:
             num_states = struct.unpack('>I', f.read(4))[0]
-            print(f"\nReading {num_states} states from binary file")
 
             for state_idx in range(num_states):
-                print(f"\nReading state {state_idx + 1}/{num_states}")
-
                 # Read state key
                 key_size = struct.unpack('>I', f.read(4))[0]
                 key_bytes = f.read(key_size)
                 state_key = self._deserialize_state_key(key_bytes)
-                print(f"  State key: {state_key}")
 
                 # Initialize state entry
                 q_table[state_key] = {}
 
                 # Read number of actions
                 num_actions = struct.unpack('>I', f.read(4))[0]
-                print(f"  Number of actions: {num_actions}")
 
                 # Read each action and its value
                 for action_idx in range(num_actions):
@@ -220,16 +187,6 @@ class QTablePersistence:
                     action_str = action_bytes.decode('utf-8')
                     value = struct.unpack('>d', value_bytes)[0]
                     q_table[state_key][action_str] = value
-                    print(f"    Action {action_idx + 1}: {action_str} = {value}")
-
-        print(f"\nSuccessfully loaded Q-table with {len(q_table)} states")
-        print("Sample of loaded states:")
-        for i, (key, actions) in enumerate(q_table.items()):
-            if i >= 3:  # Only show first 3 states
-                break
-            print(f"  State {i + 1}:")
-            print(f"    Key: {key}")
-            print(f"    Actions: {actions}")
 
         return q_table
 

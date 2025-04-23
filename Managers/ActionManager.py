@@ -74,5 +74,6 @@ class ActionManager:
             for quantity in range(1, total_dice + 1):
                 for face in range(MIN_FACE_VALUE, MAX_FACE_VALUE + 1):
                     actions.append(Action.make_bid(quantity, face))
-
+        #if len(actions) == 0:
+            #print(state_manager.get_game_state().player_dice_counts)
         return actions

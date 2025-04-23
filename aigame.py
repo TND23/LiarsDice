@@ -52,8 +52,8 @@ class AIGame:
         self.game_state.bet_history = []
         self.game_state.dice_totals = {}
         self.game_over = 0
-        for p in range(self.player_ct):
-            self.players[p].roll()
+
+        self.roll()
         self._sum_dice()
         self.active_player = self.players[0]
         self.IDX = 0
@@ -64,9 +64,13 @@ class AIGame:
 
     def step(self) -> Action:
         """Execute one step of the game."""
+        #print(f"{self.state_manager.get_game_state().player_dice_counts}")
+        #print(f"{self.players[0].name} hand: {self.players[0].rolls}")
+        #print(f"{self.players[1].name} hand: {self.players[1].rolls}")
         if self.game_over:
             return None
         if(self.active_player is None):
+            print("Active player is none?")
             self.active_player = self.players[0]
         action = self.active_player.get_action(self.state_manager)
         if action.is_bid():
@@ -74,7 +78,13 @@ class AIGame:
         elif action.is_call_liar():
             return self.apply_liar_call(action)
         raise ValueError(f"Invalid action type: {action.type}")
-
+    # if the agent is told by a model what to do
+    def apply_action(self, action: Action) -> Action:
+        if action.is_bid():
+            return self.apply_bid(action)
+        elif action.is_call_liar():
+            return self.apply_liar_call(action)
+        raise ValueError(f"Invalid action type: {action.type}")
     # apply bid action to the game state
     @no_type_check
     def apply_bid(self, action: Action) -> Action:
@@ -82,7 +92,7 @@ class AIGame:
         assert isinstance(action, Action)
         assert action.is_bid()
         current_state = self.state_manager.get_public_state()
-
+        #print(f"{self.active_player.name} chose to: {action}\n")
         self.game_state.add_action(action)
         self.update_opp_hist((action.bid.quantity, action.bid.face_value))
 
@@ -163,7 +173,8 @@ class AIGame:
                 previous_player.reward,
                 self.state_manager.get_public_state()
             )
-
+        self.roll()
+        self.reset_bet_history()
         return action
 
     #region unlikely to change methods
@@ -233,4 +244,15 @@ class AIGame:
     # Get opponents dice counts
     def hidden_dice(self) -> List[int]:
         return [p.NUMDICE for p in self.players if p != self.active_player]
+
+    def roll(self):
+        for p in range(self.player_ct):
+            self.players[p].roll()
+
+    def reset_hands(self):
+        for p in self.players:
+            p.rolls = []
+            for i in range(self.dice_per):
+                p.rolls.append(1)
+            p.roll()
     #endregion
