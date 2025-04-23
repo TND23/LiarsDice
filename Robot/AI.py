@@ -55,13 +55,12 @@ class AI:
                 self.q_table[state_key][action_str] = 0.0
 
             action_values[action] = self.q_table[state_key][action_str]
-
         # chance of doing random action decays over time
-        if random.random() < self.epsilon:
+        if random.random() < self.epsilon or not action_values.items():
             chosen_action = random.choice(valid_actions)
         else:
             chosen_action = max(action_values.items(), key=lambda x: x[1])[0]
-            print(f"Best action chosen: {chosen_action} with value {action_values[chosen_action]}")
+        print(f"{self.name} chose to: {chosen_action}\n")
 
         return chosen_action
     #TODO: this doesn't work without a proper next state.
@@ -71,7 +70,7 @@ class AI:
             return
 
         current_state_key = self.state_manager.get_state_key()
-        next_state_key = self.state_manager.get_state_key()
+        next_state_key = self.state_manager.get_next_state_key(action)
         action_str = self.action_manager._action_to_str(action)
 
         # Initialize Q-values if needed
