@@ -28,7 +28,7 @@ class ClusterManager:
                     self.centers = [tuple(center) for center in data.get('centers', [])]
                     self.method = data.get('method', self.method)
             else:
-                # Use the same default centers that were used to create the Q-table
+                # normalized qty, normalized face
                 self.centers = [
                     (0.16666666666666666, 0.16666666666666666),
                     (0.6666666666666666, 0.6666666666666666)

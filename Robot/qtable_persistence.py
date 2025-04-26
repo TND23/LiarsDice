@@ -30,14 +30,15 @@ class QTablePersistence:
             current_player,     # int
             total_dice,        # int
             cluster_method,    # str
-            centers_tuple      # tuple of center tuples (float pairs)
+            centers_tuple,     # tuple of center tuples (float pairs)
+            hands_tuple       # tuple of hand tuples (int tuples)
         )
         """
-        if not state_key or len(state_key) != 5:
+        if not state_key or len(state_key) != 6:
             print(f"Invalid state key: {state_key}")
             return b''
 
-        bet_history, current_player, total_dice, cluster_method, centers = state_key
+        bet_history, current_player, total_dice, cluster_method, centers, hands = state_key
         parts = []
 
         # Serialize bet history
@@ -55,11 +56,19 @@ class QTablePersistence:
         parts.append(struct.pack('>I', len(method_bytes)))
         parts.append(method_bytes)
 
-        # Serialize centers (now using doubles for floating point values)
+        # Serialize centers
         parts.append(struct.pack('>I', len(centers)))
         for center in centers:
             if isinstance(center, tuple) and len(center) == 2:
                 parts.append(struct.pack('>dd', *center))
+
+        # Serialize hands
+        parts.append(struct.pack('>I', len(hands)))
+        for hand in hands:
+            if isinstance(hand, tuple):
+                parts.append(struct.pack('>I', len(hand)))
+                for die in hand:
+                    parts.append(struct.pack('>I', die))
 
         return b''.join(parts)
 
@@ -91,11 +100,25 @@ class QTablePersistence:
         offset += 4
         centers = []
         for _ in range(centers_len):
-            x, y = struct.unpack('>dd', data[offset:offset+16])  # 8 bytes per double
+            x, y = struct.unpack('>dd', data[offset:offset+16])
             centers.append((x, y))
             offset += 16
 
-        return (tuple(bet_history), current_player, total_dice, cluster_method, tuple(centers))
+        # Deserialize hands
+        hands_len = struct.unpack('>I', data[offset:offset+4])[0]
+        offset += 4
+        hands = []
+        for _ in range(hands_len):
+            hand_len = struct.unpack('>I', data[offset:offset+4])[0]
+            offset += 4
+            hand = []
+            for _ in range(hand_len):
+                die = struct.unpack('>I', data[offset:offset+4])[0]
+                hand.append(die)
+                offset += 4
+            hands.append(tuple(hand))
+
+        return (tuple(bet_history), current_player, total_dice, cluster_method, tuple(centers), tuple(hands))
 
     def save_q_table(self, q_table: Dict[Tuple, Dict[str, float]], table_id: str) -> None:
         """Save a Q-table to disk efficiently."""
@@ -124,6 +147,7 @@ class QTablePersistence:
 
             action_values = []
             for action_str, value in actions.items():
+
                 action_bytes = action_str.encode('utf-8')
                 value_bytes = struct.pack('>d', value)
                 action_values.append((action_bytes, value_bytes))

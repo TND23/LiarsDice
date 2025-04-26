@@ -1,16 +1,14 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-import os
-import numpy as np
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, no_type_check
 from GameState import GameState
-from Action import Action, ActionType, Bid
+from Action import Action, ActionType
 from const import *
 from Managers.StateManager import StateManager
 from Managers.ActionManager import ActionManager
 from datetime import datetime
+#from state_approximation.approximation_utils import StateApproximation
 # neural network parameters
 hidden = 10
 learn_rate = LEARN_RATE
@@ -80,7 +78,6 @@ class LiarsDiceModel:
     def load(self, path: str) -> None:
         """Load model from path"""
         checkpoint = torch.load(path)
-        #print(checkpoint)
         self.policy_network.load_state_dict(checkpoint['policy_state_dict'])
         self.value_network.load_state_dict(checkpoint['value_state_dict'])
 
@@ -120,13 +117,11 @@ class AveragePolicyNetwork:
 #TODO: incorporate this into StateManager (?)
 class StateEncoder:
     """Encodes game state into a tensor for neural network input."""
-    #TODO: Make GameState the state manager
     @staticmethod
     def encode_state(game_state: GameState, player_index: int) -> torch.Tensor:
         """Convert game state to tensor representation."""
         pub_state = game_state.to_public_state()
 
-        #TODO: refactor this back now that debugging complete
         input_vector = []
         vector_BET = (MAX_BET_HISTORY * 2 + 1)
         vector_PLAYERS = MAX_PLAYERS + 1
@@ -134,9 +129,12 @@ class StateEncoder:
         vector_DICE = MAX_DICE_COUNTS + 1
         vector_CLUSTER = MAX_CLUSTER_INFO + 1
         vector_LAST_BID = MAX_LAST_BID + 1
+        vector_HANDS = MAX_DICE_COUNTS * MAX_PLAYERS  # Maximum possible dice across all players
+
         # Calculate total size needed
         total_size = (
-            vector_BET + vector_PLAYERS + vector_ACTIONS + vector_DICE + vector_CLUSTER + vector_LAST_BID + 2                            # Player index and dice count
+            vector_BET + vector_PLAYERS + vector_ACTIONS + vector_DICE +
+            vector_CLUSTER + vector_LAST_BID + vector_HANDS + 2  # Player index and dice count
         )
 
         # ensure component is expected size
@@ -150,35 +148,51 @@ class StateEncoder:
                 padded.append(0)
             return padded
 
-
+        # Encode bet history
         bet_history = [item for sublist in pub_state[STATE_COMPONENTS['BET_HISTORY']] for item in sublist]
-        # handle overly long bet histories if len(bet)
         if len(bet_history) > vector_BET:
             overlong_amt = len(bet_history) - (MAX_BET_HISTORY * 2 + 1)
             bet_history = bet_history[0:-overlong_amt-1]
+        weight = FEATURE_WEIGHTS['BET_HISTORY']
+        weighted_data = [val * weight for val in bet_history]
+        input_vector.extend(pad_component(weighted_data, MAX_BET_HISTORY * 2 + 1, "BET_HISTORY"))
 
-        input_vector.extend(pad_component(bet_history, MAX_BET_HISTORY * 2 + 1, "BET_HISTORY"))
-        # Player info
-
+        # Encode player info
+        weight = FEATURE_WEIGHTS['PLAYER_INFO']
         player_info = pub_state[STATE_COMPONENTS['PLAYER_INFO']]
-        input_vector.extend(pad_component(player_info, MAX_PLAYERS + 1, "PLAYER INFO"))
+        weighted_data = [val * weight for val in player_info]
 
-        # Last action
-
+        # Encode last action
         last_action = pub_state[STATE_COMPONENTS['LAST_ACTION']]
+        weight = FEATURE_WEIGHTS['LAST_ACTION']
         input_vector.extend(pad_component(last_action, MAX_ACTIONS + 1, "LAST ACTION"))
 
-        # Dice counts
+        # Encode dice counts
         dice_counts = pub_state[STATE_COMPONENTS['DICE_COUNTS']]
+        weight = FEATURE_WEIGHTS['DICE_COUNTS']
+        weighted_data = [val * weight for val in dice_counts]
         input_vector.extend(pad_component(dice_counts, MAX_DICE_COUNTS + 1, "DICE COUNTS"))
 
-        # Cluster info
+        # Encode cluster info
         cluster_info = pub_state[STATE_COMPONENTS['CLUSTER_INFO']]
+        weight = FEATURE_WEIGHTS['CLUSTER_INFO']
+        weighted_data = [val * weight for val in cluster_info]
         input_vector.extend(pad_component(cluster_info, MAX_CLUSTER_INFO + 1, "CLUSTER INFO"))
 
-        # Last bid
+        # Encode last bid
         last_bid = pub_state[STATE_COMPONENTS['LAST_BID']]
+        weight = FEATURE_WEIGHTS['LAST_BID']
+        weighted_data = [val * weight for val in last_bid]
         input_vector.extend(pad_component(last_bid, MAX_LAST_BID + 1, "LAST BID"))
+
+        # Encode hands
+        hands = game_state.hands if game_state.hands else []
+        flat_hands = []
+        for hand in hands:
+            flat_hands.extend(hand)
+        weight = FEATURE_WEIGHTS['HANDS']
+        weighted_data = [val * weight for val in flat_hands]
+        input_vector.extend(pad_component(flat_hands, vector_HANDS, "HANDS"))
 
         # Add current player index and dice count
         input_vector.append(player_index)
@@ -191,23 +205,46 @@ class StateEncoder:
 
 class ActionDecoder:
     """Decodes neural network outputs into game actions."""
-
+    @no_type_check
     @staticmethod
     def decode_action(action_probs: torch.Tensor, state_manager: StateManager, action_manager: ActionManager) -> Action:
-        """Convert action probabilities to a game action."""
-        valid_actions = action_manager.get_valid_actions(state_manager)
+        """Convert action probabilities to a game action.
 
+        Args:
+            action_probs: Tensor of action probabilities from the policy network
+            state_manager: Current state manager containing game state
+            action_manager: Action manager for validating actions
+
+        Returns:
+            Action: The selected action, considering the model's hand
+        """
+        valid_actions = action_manager.get_valid_actions(state_manager)
         if not valid_actions:
             return Action.call_liar()
 
-        action_map = {i: action for i, action in enumerate(valid_actions)}
-        action_idx = torch.argmax(action_probs).item()
+        # Get the model's hand from the state
+        game_state = state_manager.get_game_state()
+        model_hand = game_state.get_model_hand() if game_state else tuple()
 
-        # TODO: Should pick next best valid action eventually
-        # If the selected action is not valid, choose the first valid action
-        if action_idx >= len(valid_actions):
-            #print(f"Selected action {action_idx} is not valid - choosing first valid action.")
-            return valid_actions[0]
-        #print(action_map[action_idx])
-        return action_map[action_idx]
+        # Create action mapping and filter based on model's hand
+        action_map = {}
+        for i, action in enumerate(valid_actions):
+            # For bid actions, check if the model has the face value in their hand
+            if action.type == ActionType.BID:
+                bid = action.bid
+                face_value = bid.face_value
+                if face_value in model_hand:
+                    action_map[i] = action
+            else:  # For non-bid actions (like calling liar), always include
+                action_map[i] = action
+
+        if not action_map:
+            return Action.call_liar()
+
+        # Get probabilities for valid actions only
+        valid_indices = list(action_map.keys())
+        valid_probs = action_probs[0, valid_indices]  # Assuming action_probs is 2D tensor
+        # Select action with highest probability among valid actions
+        best_idx = valid_indices[torch.argmax(valid_probs).item()]
+        return action_map[best_idx]
 

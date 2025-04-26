@@ -1,7 +1,5 @@
 from Action import Action
-from typing import Union, no_type_check, List, Any
-from GameState import GameState
-import GameState
+from typing import no_type_check, List
 from Managers.StateManager import StateManager
 from const import MAX_FACE_VALUE, MIN_FACE_VALUE
 
@@ -33,16 +31,11 @@ class ActionManager:
     def get_valid_actions(self, state_manager: StateManager) -> List[Action]:
         """
         Get valid actions for the current game state.
-        Works with GameState objects, public state lists, or StateManager.
-
         Args:
-            state: Either a GameState object, public state list, or StateManager
+            StateManager
         Returns:
             List of valid Action objects
         """
-        # Handle StateManager
-
-
         game_state = state_manager.get_game_state()
 
         actions = []
@@ -74,6 +67,4 @@ class ActionManager:
             for quantity in range(1, total_dice + 1):
                 for face in range(MIN_FACE_VALUE, MAX_FACE_VALUE + 1):
                     actions.append(Action.make_bid(quantity, face))
-        #if len(actions) == 0:
-            #print(state_manager.get_game_state().player_dice_counts)
         return actions

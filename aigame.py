@@ -30,7 +30,8 @@ class AIGame:
             total_dice=player_ct * dice_per,
             dice_totals={}, # It might be better to use a list?
             bet_history=[],
-            cluster_manager=cluster_manager
+            cluster_manager=cluster_manager,
+            hands=[]
         )
 
         self.state_manager = StateManager()
@@ -64,9 +65,6 @@ class AIGame:
 
     def step(self) -> Action:
         """Execute one step of the game."""
-        #print(f"{self.state_manager.get_game_state().player_dice_counts}")
-        #print(f"{self.players[0].name} hand: {self.players[0].rolls}")
-        #print(f"{self.players[1].name} hand: {self.players[1].rolls}")
         if self.game_over:
             return None
         if(self.active_player is None):
@@ -83,6 +81,8 @@ class AIGame:
         if action.is_bid():
             return self.apply_bid(action)
         elif action.is_call_liar():
+            print("Applying liar call")
+            print(self.state_manager.get_public_state())
             return self.apply_liar_call(action)
         raise ValueError(f"Invalid action type: {action.type}")
     # apply bid action to the game state
@@ -92,7 +92,6 @@ class AIGame:
         assert isinstance(action, Action)
         assert action.is_bid()
         current_state = self.state_manager.get_public_state()
-        #print(f"{self.active_player.name} chose to: {action}\n")
         self.game_state.add_action(action)
         self.update_opp_hist((action.bid.quantity, action.bid.face_value))
 
@@ -246,13 +245,19 @@ class AIGame:
         return [p.NUMDICE for p in self.players if p != self.active_player]
 
     def roll(self):
-        for p in range(self.player_ct):
+        """Roll dice for all players and update the game state."""
+        hands = []
+        for p in range(len(self.players)):
             self.players[p].roll()
+            hands.append(tuple(sorted(self.players[p].rolls)))  # Sort hands for consistency
+        self.game_state.add_hands(hands)
 
     def reset_hands(self):
+        """Reset all players' hands."""
         for p in self.players:
             p.rolls = []
-            for i in range(self.dice_per):
+            for _ in range(self.dice_per):  # Initialize with correct number of dice
                 p.rolls.append(1)
             p.roll()
+        self.roll()  # Roll all hands again to ensure proper initialization
     #endregion

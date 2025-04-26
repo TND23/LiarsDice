@@ -1,16 +1,14 @@
 import torch
-import numpy as np
 from typing import List, Tuple, Dict, Any
 from collections import deque
 import random
 import os
 from Managers.StateManager import StateManager
-from Robot import qtable_persistence
 from model import LiarsDiceModel, StateEncoder, ActionDecoder
 from Robot.qtable_persistence import QTablePersistence
 from GameState import GameState
 from Action import Action
-from const import EPSILON, CUR_Q_TABLE_NAME, LEARN_RATE
+from const import EPSILON, CUR_Q_TABLE_NAME, LEARN_RATE, MEMORY_SIZE, STATE_COMPONENTS
 from Managers.ActionManager import ActionManager
 class DeepQLearningAgent:
     """Agent that combines Q-learning with neural networks for deep Q-learning."""
@@ -22,7 +20,7 @@ class DeepQLearningAgent:
                  learning_rate: float = LEARN_RATE,
                  gamma: float = 0.99,
                  epsilon: float = EPSILON,
-                 memory_size: int = 10000,
+                 memory_size: int = MEMORY_SIZE,
                  batch_size: int = 64,
                  q_table_path: str = "./data/q_tables"):
 
@@ -55,7 +53,6 @@ class DeepQLearningAgent:
         """Get action using epsilon-greedy policy."""
         state = state_man.get_game_state()
         if random.random() < self.epsilon:
-            # Random action
             valid_actions = action_manager.get_valid_actions(state_man)
             return random.choice(valid_actions)
 
@@ -69,22 +66,22 @@ class DeepQLearningAgent:
         except FileNotFoundError:
             table_q_values = {}
             print("Couldn't find q-table: using empty values.")
-
+        # pass in sstate_key
         # TODO: improve validation for q_values tensor-ability, consider updating weights.
         if state_key in table_q_values:
             table_values = torch.tensor(list(table_q_values[state_key].values()))
             combined_q_values = (nn_q_values + table_values) / 2
         else:
+            # Otherwise, find the closest cluster (the state in the q_table with a known value)
+            #
             combined_q_values = nn_q_values
 
         return ActionDecoder.decode_action(combined_q_values, state_man, action_manager)
     # see https://deeplizard.com/learn/video/Bcuj2fTH4_4 for definition of experience / memory
     # TODO: implement next_state (this isn't called until then)
     def remember(self, state: GameState, action: Action, reward: float,
-                next_state: GameState, done: bool, player_index: int):
+                next_state: GameState, done: bool, player_index: int, hand: Tuple[int] = (0,)):
         """Store experience in replay memory."""
-        state_key = self._state_to_key(state, player_index)
-        next_state_key = self._state_to_key(next_state, player_index)
 
         self.memory.append((
             state,
@@ -92,7 +89,8 @@ class DeepQLearningAgent:
             reward,
             next_state,
             done,
-            player_index
+            player_index,
+            hand
         ))
 
     # TODO: implement next_state
@@ -102,7 +100,7 @@ class DeepQLearningAgent:
             return
 
         batch = random.sample(self.memory, self.batch_size)
-        states, actions, rewards, next_states, dones, player_indices = zip(*batch)
+        states, actions, rewards, next_states, dones, player_indices, hands = zip(*batch)
 
         state_tensors = []
         next_state_tensors = []
@@ -142,7 +140,20 @@ class DeepQLearningAgent:
             pass
 
     def save_qtable(self, q_table: Dict[Tuple, Dict[str, float]], name: str):
-        self.q_table_persistence.save_q_table(q_table, name)
+        """Save Q-table to disk."""
+        if not q_table:
+            print("Warning: Attempting to save empty Q-table")
+            return
+
+        # Convert state keys to proper format
+        formatted_q_table = {}
+        for state_key, actions in q_table.items():
+            if not isinstance(state_key, tuple) or len(state_key) != 6: #len(STATE_COMPONENTS)-1
+                print(f"Warning: Invalid state key format: {state_key}")
+                continue
+            formatted_q_table[state_key] = actions
+
+        self.q_table_persistence.save_q_table(formatted_q_table, name)
 
     def load(self, path: str):
         """Load model and Q-table."""
@@ -162,10 +173,14 @@ class DeepQLearningAgent:
         total_dice = sum(state.player_dice_counts)
         cluster_method = "avg"
         centers = ((0.16666666666666666, 0.16666666666666666),)
+        hands = tuple(tuple(hand) for hand in state.hands) if state.hands else tuple()
 
         if bet_history:
             bet_history = tuple(tuple(bid) for bid in bet_history)
         else:
             bet_history = ()
 
-        return (bet_history, current_player, total_dice, cluster_method, centers)
+        state_key = (bet_history, current_player, total_dice, cluster_method, centers, hands)
+        if len(state_key) != 6:
+            raise ValueError(f"Invalid state key length: {len(state_key)}")
+        return state_key

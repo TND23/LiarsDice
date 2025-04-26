@@ -1,9 +1,8 @@
-import stat
 import numpy as np
 from Action import Action, ActionType, Bid
 import random
 from const import *
-from typing import List, Dict, Tuple, Any, Optional
+from typing import List, Dict, Tuple, Any
 from Managers.ClusterManager import ClusterManager
 from Managers.StateManager import StateManager
 from Managers.ActionManager import ActionManager
@@ -34,16 +33,13 @@ class AI:
         # might be uneccessary to update state_manager
         self.state_manager = state_manager
         valid_actions = self.action_manager.get_valid_actions(state_manager)
-
         action_values = {}
         state_key = self.state_manager.get_state_key()
-
         # Initialize Q-values for valid actions
         for action in valid_actions:
             assert isinstance(state_key, Tuple)
             assert isinstance(self.q_table, Dict)
             action_str = self.action_manager._action_to_str(action)
-
             # Only initialize if the state key doesn't exist
             if state_key not in self.q_table:
                 self.q_table[state_key] = {}
