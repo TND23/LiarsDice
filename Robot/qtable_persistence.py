@@ -26,41 +26,21 @@ class QTablePersistence:
 
         State key structure:
         (
-            bet_history_tuple,  # tuple of bid tuples ((qty, face), ...)
             current_player,     # int
-            total_dice,        # int
-            cluster_method,    # str
-            centers_tuple,     # tuple of center tuples (float pairs)
-            hands_tuple       # tuple of hand tuples (int tuples)
+            hands,             # tuple of hand tuples (int tuples)
+            most_freq_opp_face, # int
+            last_bid,          # tuple(quantity: int, face_value: int) or None
         )
         """
-        if not state_key or len(state_key) != 6:
+        if not state_key or len(state_key) != 4:
             print(f"Invalid state key: {state_key}")
             return b''
 
-        bet_history, current_player, total_dice, cluster_method, centers, hands = state_key
+        current_player, hands, most_freq_opp_face, last_bid = state_key
         parts = []
 
-        # Serialize bet history
-        parts.append(struct.pack('>I', len(bet_history)))
-        for bid in bet_history:
-            if isinstance(bid, tuple) and len(bid) == 2:
-                parts.append(struct.pack('>II', *bid))
-
-        # Serialize current player and total dice
+        # Serialize current player
         parts.append(struct.pack('>I', current_player))
-        parts.append(struct.pack('>I', total_dice))
-
-        # Serialize cluster method
-        method_bytes = cluster_method.encode('utf-8')
-        parts.append(struct.pack('>I', len(method_bytes)))
-        parts.append(method_bytes)
-
-        # Serialize centers
-        parts.append(struct.pack('>I', len(centers)))
-        for center in centers:
-            if isinstance(center, tuple) and len(center) == 2:
-                parts.append(struct.pack('>dd', *center))
 
         # Serialize hands
         parts.append(struct.pack('>I', len(hands)))
@@ -70,6 +50,19 @@ class QTablePersistence:
                 for die in hand:
                     parts.append(struct.pack('>I', die))
 
+        # Serialize most frequent opponent face
+        parts.append(struct.pack('>I', most_freq_opp_face))
+
+        # Serialize last bid (quantity, face_value tuple)
+        if last_bid is None:
+            # Use special values to indicate None
+            parts.append(struct.pack('>I', 0))  # quantity = 0
+            parts.append(struct.pack('>I', 0))  # face_value = 0
+        else:
+            quantity, face_value = last_bid
+            parts.append(struct.pack('>I', quantity))
+            parts.append(struct.pack('>I', face_value))
+
         return b''.join(parts)
 
     def _deserialize_state_key(self, data: bytes) -> Tuple:
@@ -78,31 +71,9 @@ class QTablePersistence:
 
         offset = 0
 
-        bet_history_len = struct.unpack('>I', data[offset:offset+4])[0]
-        offset += 4
-        bet_history = []
-        for _ in range(bet_history_len):
-            qty, face = struct.unpack('>II', data[offset:offset+8])
-            bet_history.append((qty, face))
-            offset += 8
-
+        # Deserialize current player
         current_player = struct.unpack('>I', data[offset:offset+4])[0]
         offset += 4
-        total_dice = struct.unpack('>I', data[offset:offset+4])[0]
-        offset += 4
-
-        method_len = struct.unpack('>I', data[offset:offset+4])[0]
-        offset += 4
-        cluster_method = data[offset:offset+method_len].decode('utf-8')
-        offset += method_len
-
-        centers_len = struct.unpack('>I', data[offset:offset+4])[0]
-        offset += 4
-        centers = []
-        for _ in range(centers_len):
-            x, y = struct.unpack('>dd', data[offset:offset+16])
-            centers.append((x, y))
-            offset += 16
 
         # Deserialize hands
         hands_len = struct.unpack('>I', data[offset:offset+4])[0]
@@ -117,9 +88,22 @@ class QTablePersistence:
                 hand.append(die)
                 offset += 4
             hands.append(tuple(hand))
+        hands = tuple(hands)
 
-        return (tuple(bet_history), current_player, total_dice, cluster_method, tuple(centers), tuple(hands))
+        # Deserialize most frequent opponent face
+        most_freq_opp_face = struct.unpack('>I', data[offset:offset+4])[0]
+        offset += 4
 
+        # Deserialize last bid
+        quantity = struct.unpack('>I', data[offset:offset+4])[0]
+        offset += 4
+        face_value = struct.unpack('>I', data[offset:offset+4])[0]
+        offset += 4
+
+        # Convert (0,0) back to None if that was used to represent None
+        last_bid = (quantity, face_value) if (quantity != 0 or face_value != 0) else None
+
+        return (current_player, hands, most_freq_opp_face, last_bid)
     def save_q_table(self, q_table: Dict[Tuple, Dict[str, float]], table_id: str) -> None:
         """Save a Q-table to disk efficiently."""
         # print(f"\n=== Saving Q-table {table_id} ===")

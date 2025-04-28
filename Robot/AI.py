@@ -3,7 +3,6 @@ from Action import Action, ActionType, Bid
 import random
 from const import *
 from typing import List, Dict, Tuple, Any
-from Managers.ClusterManager import ClusterManager
 from Managers.StateManager import StateManager
 from Managers.ActionManager import ActionManager
 from Robot.qtable_persistence import QTablePersistence
@@ -13,7 +12,7 @@ from datetime import datetime
 names = ['Alex', 'Bob', 'Charlie', 'Denise', 'Ellyn', 'Frank', 'George', 'Hugh', 'InteractivRobot', 'John', 'Kaitlyn', 'Leeroy', 'Marco', 'Nate', 'Orville', 'Parm', 'Quincy', 'Roger', 'Scott', 'TJ', 'Usher', 'Victor', 'Winston', 'Sir Xylophone', 'Yvette', 'Zach']
 
 class AI:
-    def __init__(self, p_index: int, cluster_manager: ClusterManager, action_manager: ActionManager):
+    def __init__(self, p_index: int, action_manager: ActionManager):
         self.learning_rate = LEARN_RATE
         self.discount_factor = DISCOUNT_FACTOR
         self.epsilon = EPSILON # Exploration rate
@@ -23,7 +22,6 @@ class AI:
         self.p_index = p_index
         self.reward = 0
         self.name = self.fun_name() + f"Bot_{p_index}"
-        self.cluster_manager = cluster_manager
         self.state_manager = StateManager()
         self.persistence = QTablePersistence()
         self.action_manager = ActionManager()
@@ -57,7 +55,7 @@ class AI:
 
         return chosen_action
     #TODO: this doesn't work without a proper next state.
-    def update_q_value(self, state: List[Any], action: Action, reward: float, next_state: List[Any]) -> None:
+    def update_q_value(self, action: Action, reward: float) -> None:
         """Update Q-value based on the current state, action, reward, and next state."""
         if action is None: # if end of game just return since no next state.
             return
@@ -92,11 +90,8 @@ class AI:
 
     #region helpers
 
-    # Doesn't track liar calls
-    def update_opp_bids(self, bid: Tuple[int, int]) -> None:
-        """Track opponent bids for learning"""
-        if isinstance(bid, tuple) and len(bid) == 2:
-            self.epsilon = max(EPSILON, self.epsilon * 0.995)  # Decay exploration rate
+
+        # self.epsilon = max(EPSILON, self.epsilon * 0.995)  # Decay exploration rate
 
     def update_reward(self, reward: float) -> None:
         self.reward = reward

@@ -5,7 +5,6 @@ from typing import List, Tuple, Optional
 from Managers.StateManager import StateManager
 from deep_q_learning import DeepQLearningAgent
 from aigame import AIGame
-from Managers.ClusterManager import ClusterManager
 from Managers.ActionManager import ActionManager
 from model import StateEncoder
 from const import CUR_Q_TABLE_NAME, LEARN_RATE
@@ -15,13 +14,12 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
     """Train the deep Q-learning agent."""
     total_rewards = []
     win_rates = []
-    cluster_manager = ClusterManager(method="avg")
     action_manager = ActionManager()
     last_qtable = {}
     for episode in range(num_episodes):
         try:
             # Create a new game
-            game = AIGame(2, 5, cluster_manager, action_manager)  # 2 players, 5 dice each
+            game = AIGame(2, 5, action_manager)  # 2 players, 5 dice each
             # Initialize hands before starting the episode
             game.reset_hands()
             episode_rewards = [0.0] * len(game.players)
@@ -105,11 +103,10 @@ def evaluate_against_agent(agent: DeepQLearningAgent, opponent: Optional[DeepQLe
 def evaluate_agent(agent: DeepQLearningAgent, num_games: int = 5) -> float:
     """Evaluate the agent against a random policy."""
     wins = 0
-    cluster_manager = ClusterManager(method="avg")
     action_manager = ActionManager()
     last_q_table = {}
     for _ in range(num_games):
-        game = AIGame(2, 5, cluster_manager, action_manager)  # 2 players, 5 dice each
+        game = AIGame(2, 5, action_manager)  # 2 players, 5 dice each
         game.start_round()
         if last_q_table != {}:
             # utilize the last q table if available
@@ -142,9 +139,8 @@ def main():
     np.random.seed(42)
 
     # Create a temporary game to get the correct input size
-    cluster_manager = ClusterManager(method="avg")
     action_manager = ActionManager()
-    game = AIGame(2, 5, cluster_manager, action_manager)
+    game = AIGame(2, 5, action_manager)
     state_tensor = StateEncoder.encode_state(game.game_state, 0)
     input_size = state_tensor.size(1)
 
@@ -159,7 +155,7 @@ def main():
     )
 
     print("Training deep Q-learning agent...")
-    total_rewards, win_rates = train_deep_q(agent, num_episodes=10000)
+    total_rewards, win_rates = train_deep_q(agent, num_episodes=500)
 
     # Evaluate final agent
     print("\nEvaluating final agent...")

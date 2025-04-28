@@ -148,7 +148,7 @@ class DeepQLearningAgent:
         # Convert state keys to proper format
         formatted_q_table = {}
         for state_key, actions in q_table.items():
-            if not isinstance(state_key, tuple) or len(state_key) != 6: #len(STATE_COMPONENTS)-1
+            if not isinstance(state_key, tuple) or len(state_key) != 4: #len(STATE_COMPONENTS)-1
                 print(f"Warning: Invalid state key format: {state_key}")
                 continue
             formatted_q_table[state_key] = actions
@@ -168,19 +168,12 @@ class DeepQLearningAgent:
         """Convert game state to Q-table key format."""
         pub_state = state.to_public_state()
 
-        bet_history = pub_state[0]
         current_player = player_index
-        total_dice = sum(state.player_dice_counts)
-        cluster_method = "avg"
-        centers = ((0.16666666666666666, 0.16666666666666666),)
         hands = tuple(tuple(hand) for hand in state.hands) if state.hands else tuple()
+        most_freq_opp_face = pub_state[STATE_COMPONENTS['MOST_FREQ_OPP_BID']]
+        last_bid = pub_state[STATE_COMPONENTS['LAST_BID']]
 
-        if bet_history:
-            bet_history = tuple(tuple(bid) for bid in bet_history)
-        else:
-            bet_history = ()
-
-        state_key = (bet_history, current_player, total_dice, cluster_method, centers, hands)
-        if len(state_key) != 6:
+        state_key = (current_player, hands, most_freq_opp_face, last_bid)
+        if len(state_key) != 4:
             raise ValueError(f"Invalid state key length: {len(state_key)}")
         return state_key

@@ -39,12 +39,14 @@ class ActionManager:
         game_state = state_manager.get_game_state()
 
         actions = []
-        total_dice = game_state.total_dice
 
         # Can only call lie if there's a previous bid
-        if game_state.bet_history:
+        if game_state.last_bid != None:
             actions.append(Action.call_liar())
 
+        total_dice = 10
+        if len(game_state.hands) > 0:
+            total_dice = sum(game_state.hands[0])
         # Get previous bid if it exists
         prev_bid = game_state.get_last_bid()
 
