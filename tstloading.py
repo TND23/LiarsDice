@@ -8,12 +8,11 @@ from deep_q_learning import DeepQLearningAgent
 from aigame import AIGame
 from GameState import GameState
 from Action import Action
-from Managers.ClusterManager import ClusterManager
 from Managers.ActionManager import ActionManager
 from model import StateEncoder
 import os
 import time
-
+from const import EPSILON, CUR_MODEL_PATH
 def main():
     # Set random seeds for reproducibility
     torch.manual_seed(42)
@@ -21,9 +20,8 @@ def main():
     np.random.seed(42)
 
     # Create a temporary game to get the correct input size
-    cluster_manager = ClusterManager(method="avg")
     action_manager = ActionManager()
-    game = AIGame(2, 5, cluster_manager, action_manager)
+    game = AIGame(2, 5, action_manager)
     state_tensor = StateEncoder.encode_state(game.game_state, 0)
     input_size = state_tensor.size(1)
 
@@ -34,10 +32,10 @@ def main():
         output_size=100,
         learning_rate=0.001,
         gamma=0.99,
-        epsilon=0.1
+        epsilon=EPSILON
     )
 
-    tbl = agent.load("models/deep_q/final_model.pt")
+    tbl = agent.load(CUR_MODEL_PATH)
     print(tbl)
 
 if __name__ == "__main__":
