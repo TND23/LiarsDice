@@ -18,6 +18,9 @@ class QTablePersistence:
     def _get_metadata_path(self, table_id: str) -> Path:
         return self.base_dir / f"{table_id}_metadata.json"
 
+    def _get_model_path(self, table_id: str) -> Path:
+        return self.base_dir / f"{table_id}_model.pt"
+
     def _get_values_path(self, table_id: str) -> Path:
         return self.base_dir / f"{table_id}_values.bin"
 
