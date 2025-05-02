@@ -7,7 +7,7 @@ from deep_q_learning import DeepQLearningAgent
 from aigame import AIGame
 from Managers.ActionManager import ActionManager
 from model import StateEncoder
-from const import CUR_Q_TABLE_NAME, LEARN_RATE
+from const import CUR_MODEL_NAME, CUR_MODEL_PATH, CUR_Q_TABLE_NAME, LEARN_RATE
 
 from const import EPSILON
 def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optional[DeepQLearningAgent] = None, q_table_name=CUR_Q_TABLE_NAME) -> Tuple[List[float], List[float]]:
@@ -15,20 +15,20 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
     total_rewards = []
     win_rates = []
     action_manager = ActionManager()
-    last_qtable = {}
+
     for episode in range(num_episodes):
         try:
             # Create a new game
-            game = AIGame(2, 5, action_manager)  # 2 players, 5 dice each
-            # Initialize hands before starting the episode
+            game = AIGame(2, 5, action_manager)
             game.reset_hands()
             episode_rewards = [0.0] * len(game.players)
             done = False
             state_man = game.state_manager
-            if last_qtable:
-                game.players[0].q_table = last_qtable
+            reward = 0.0
+
+            # Use the agent's cached Q-table
+            game.players[0].q_table = agent.q_table_cache
             while not done:
-                # train on batch
                 current_state = game.state_manager.get_game_state()
                 if not current_state.hands:
                     print("Warning: No hands in current state!")
@@ -41,17 +41,15 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
                 prev_state = current_state
                 game.step()
                 next_state = game.state_manager.get_next_state(action)
-
+                reward = game.players[0].reward
                 # Calculate reward
-                reward = 0.0
                 if game.check_game_over():
-                    last_qtable = game.players[0].q_table
                     done = True
                     winner_idx = game.players[0].p_index
                     if current_player_idx == winner_idx:
-                        reward = 1.0
+                        reward = 10 + game.players[winner_idx].reward * .1
                     else:
-                        reward = -1.0
+                        reward = -10 + game.players[winner_idx].reward * .1
 
                 # Store experience
                 agent.remember(
@@ -64,32 +62,37 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
                     hand
                 )
 
-                # Update episode rewards
+                # Update episode rewards and replay
                 episode_rewards[current_player_idx] += reward
+                #action_manager.decay_random_liar_prob()
                 agent.replay()
 
                 # Update target network periodically
                 if game.round_number % 100 == 0:
                     agent.update_target_model()
+
             # Calculate win rate
             total_rewards.append(sum(episode_rewards))
             win_rate = sum(1 for r in episode_rewards if r > 0) / len(episode_rewards)
             win_rates.append(win_rate)
 
-            # Print progress and save Q-table
-            if (episode + 1) % 10 == 0:
-                agent.save_qtable(last_qtable, q_table_name)
+            # Save progress periodically
+            agent.save_if_needed(episode)
+
+            # Print progress
+            if (episode + 1) % 100 == 0:
                 print(f"Episode {episode+1}/{num_episodes}")
-                print(f"Average reward: {sum(total_rewards[-10:])/10:.2f}")
-                print(f"Win rate: {sum(win_rates[-10:])/10:.2%}")
+                print(f"Average reward: {sum(total_rewards[-100:])/100:.2f}")
+                print(f"Win rate: {sum(win_rates[-100:])/100:.2%}")
                 print(f"Memory size: {len(agent.memory)}")
+                print(f"Q-table size: {len(agent.q_table_cache)}")
 
         except Exception as e:
             print(f"Error in episode {episode}: {str(e)}")
             continue
 
     # Save final Q-table
-    agent.save_qtable(last_qtable, q_table_name)
+    agent.save_qtable(agent.q_table_cache, q_table_name)
     return total_rewards, win_rates
 
 
@@ -113,6 +116,7 @@ def evaluate_agent(agent: DeepQLearningAgent, num_games: int = 5) -> float:
             game.players[0].q_table = last_q_table
         done = False
         state_manager = game.state_manager
+
         assert isinstance(state_manager, StateManager)
         while not done:
             if game.IDX == 0:  # Agent's turn
@@ -155,7 +159,7 @@ def main():
     )
 
     print("Training deep Q-learning agent...")
-    total_rewards, win_rates = train_deep_q(agent, num_episodes=500)
+    total_rewards, win_rates = train_deep_q(agent, num_episodes=10000)
 
     # Evaluate final agent
     print("\nEvaluating final agent...")
@@ -163,8 +167,33 @@ def main():
     print(f"Final win rate against random policy: {win_rate:.2%}")
 
     # Save final model
-    agent.save("models/deep_q/final_model.pt")
+    agent.save_qtable(agent.q_table_cache, CUR_MODEL_NAME)
+    agent.save(CUR_MODEL_PATH)
     print("\nTraining complete!")
+
+def compare_factors():
+    """Compare the effects of different factors on the training process."""
+    # Compare learning rate
+    action_manager = ActionManager()
+    game = AIGame(2, 5, action_manager)
+    state_tensor = StateEncoder.encode_state(game.game_state, 0)
+    effectivenesss_file = "data/analysis/adjusted_rewards.txt"
+    input_size = state_tensor.size(1)
+    lr = 0.01
+    epsilon = 0.5
+    gamma = 0.99
+
+    model_name = f"lr_{lr}_gamma_{gamma}_epsilon_{epsilon}"
+    model_path = f"models/deep_q/{model_name}.pt"
+    agent = DeepQLearningAgent(input_size=input_size, hidden_size=128, output_size=100, learning_rate=lr, gamma=gamma, epsilon=epsilon)
+    total_rewards, win_rates = train_deep_q(agent, num_episodes=10000)
+    agent.save(model_path)
+    write_rewards_win_rates(total_rewards, model_name, win_rates, effectivenesss_file)
+
+def write_rewards_win_rates(rewards: List[float], model_name: str, win_rates: List[float], file_path: str):
+    """Write the rewards and win rates to a file."""
+    with open(file_path, "a") as f:
+        f.write(f"{model_name},{sum(rewards)/len(rewards)},{sum(win_rates)/len(win_rates)}\n")
 
 if __name__ == "__main__":
     main()
