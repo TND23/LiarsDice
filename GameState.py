@@ -1,45 +1,72 @@
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
-from Action import Action, ActionType
+from typing import List, Optional, Dict, Any, Tuple, no_type_check
+from Action import Action
+from const import *
 
 @dataclass
 class GameState:
-    action_history: List[Action]
-    player_dice_counts: List[int]
     current_player: int
-    total_dice: int
-    dice_totals: Dict[int, int]  # Maps face value to count
-    bet_history: List[tuple[int, int]]  # List of (quantity, face_value) tuples
-    
-    def get_last_action(self) -> Optional[Action]:
-        return self.action_history[-1] if self.action_history else None
-    
-    def get_last_bid(self) -> Optional[tuple[int, int]]:
-        return self.bet_history[-1] if self.bet_history else None
-    
-    def add_action(self, action: Action) -> None:
-        self.action_history.append(action)
-        if action.is_bid():
-            self.bet_history.append((action.bid.quantity, action.bid.face_value))
-    
-    def to_public_state(self) -> List[Any]:
+    hands: List[Tuple[int]]
+    most_freq_opp_face: int
+    last_bid: Optional[Tuple[int, int]]
+    players: int
+
+    def to_public_state(self) -> List[List[Any]]:
         """Convert to the public state representation used by AI"""
-        return [
-            len(self.bet_history),  # BET_HIST_IDX
-            len(self.player_dice_counts),  # PLAYER_CT_IDX
-            self.get_last_action().type.value if self.get_last_action() else -1,  # LAST_ACTION_IDX
-            self.total_dice,  # TOTAL_DICE_IDX
-            *self.player_dice_counts  # Hidden dice counts
-        ]
-    
+        # Using STATE_COMPONENTS list instead of hardcoding indices.
+        pub_state = [[] for _ in range(len(STATE_COMPONENTS))]
+        pub_state[STATE_COMPONENTS['PLAYER_IDX']] = self.current_player
+        pub_state[STATE_COMPONENTS['HANDS']] = self.hands
+        pub_state[STATE_COMPONENTS['MOST_FREQ_OPP_BID']] = self.most_freq_opp_face
+        pub_state[STATE_COMPONENTS['LAST_BID']] = self.last_bid
+        pub_state[STATE_COMPONENTS['PLAYERS']] = self.players
+        return pub_state
+
     @classmethod
-    def from_public_state(cls, pub_state: List[Any], current_player: int) -> 'GameState':
-        """Create a GameState from the public state representation"""
-        return cls(
-            action_history=[],  # Would need to be populated from game history
-            player_dice_counts=pub_state[4:],  # Hidden dice counts
+    @no_type_check
+    # very smelly
+    def from_public_state(cls, pub_state: List[List[Any]], current_player: int) -> 'GameState':
+        """Create GameState from the public state representation"""
+        last_bid = pub_state[STATE_COMPONENTS['LAST_BID']]
+        # this should never happen
+        if isinstance(last_bid, list):
+            last_bid = last_bid[0] if last_bid else None
+        most_freq_opp_face = pub_state[STATE_COMPONENTS['MOST_FREQ_OPP_BID']]
+        # this would happen if there were more than two players
+        if isinstance(most_freq_opp_face, list):
+            most_freq_opp_face = most_freq_opp_face[0] if most_freq_opp_face else 0
+        hands = pub_state[STATE_COMPONENTS['HANDS']] if STATE_COMPONENTS['HANDS'] < len(pub_state) else []
+        players = pub_state[STATE_COMPONENTS['PLAYERS']]
+        # this should never happen
+        if isinstance(players, list):
+            players = players[0] if players else STATE_COMPONENTS['PLAYERS']
+
+        game_state = cls(
+            hands=hands,
+            most_freq_opp_face=most_freq_opp_face,
+            last_bid=last_bid,
             current_player=current_player,
-            total_dice=pub_state[3],  # TOTAL_DICE_IDX
-            dice_totals={},  # Would need to be populated from actual dice
-            bet_history=[]  # Would need to be populated from game history
+            players=players
         )
+        return game_state
+
+    def get_active_player_hand(self) -> Tuple[int]:
+        """Get the hand of the current active player."""
+        return self.hands[self.current_player] if self.hands and self.current_player < len(self.hands) else tuple()
+
+    def get_model_hand(self) -> Tuple[int]:
+        """Get the hand of the model (player 1)."""
+        return self.hands[1] if self.hands and len(self.hands) > 1 else tuple()
+
+    def add_hands(self, hands: List[Tuple[int]]) -> None:
+        """Add or update the hands of all players."""
+        self.hands = hands
+
+    def get_last_bid(self) -> Optional[Tuple[int, int]]:
+        """Get the last bid as a tuple of (quantity, face_value) or None."""
+        if isinstance(self.last_bid, list):
+            if self.last_bid and isinstance(self.last_bid[0], tuple):
+                return self.last_bid[0]
+            return None
+        return self.last_bid
+
