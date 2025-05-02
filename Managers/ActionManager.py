@@ -1,12 +1,13 @@
 from Action import Action
 from typing import no_type_check, List
 from Managers.StateManager import StateManager
-from const import MAX_FACE_VALUE, MIN_FACE_VALUE
+from const import MAX_FACE_VALUE, MIN_FACE_VALUE, RANDOM_LIAR_PROB
 
 @no_type_check
 class ActionManager:
     def __init__(self):
         self.actions = []
+        self.random_liar_prob = RANDOM_LIAR_PROB
 
     def get_actions(self):
         return self.actions
@@ -37,16 +38,14 @@ class ActionManager:
             List of valid Action objects
         """
         game_state = state_manager.get_game_state()
-
         actions = []
 
         # Can only call lie if there's a previous bid
         if game_state.last_bid != None:
             actions.append(Action.call_liar())
 
-        total_dice = 10
-        if len(game_state.hands) > 0:
-            total_dice = sum(game_state.hands[0])
+        # Calculate total dice in play by summing all players' dice
+        total_dice = sum(len(hand) for hand in game_state.hands)
         # Get previous bid if it exists
         prev_bid = game_state.get_last_bid()
 
@@ -70,3 +69,7 @@ class ActionManager:
                 for face in range(MIN_FACE_VALUE, MAX_FACE_VALUE + 1):
                     actions.append(Action.make_bid(quantity, face))
         return actions
+
+    def decay_random_liar_prob(self):
+        self.random_liar_prob *= 0.999
+
