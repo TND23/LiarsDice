@@ -2,7 +2,7 @@ import numpy as np
 from Action import Action, ActionType, Bid
 import random
 from const import *
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple, Any, no_type_check
 from Managers.StateManager import StateManager
 from Managers.ActionManager import ActionManager
 from Robot.qtable_persistence import QTablePersistence
@@ -25,12 +25,15 @@ class AI:
         self.state_manager = StateManager()
         self.persistence = QTablePersistence()
         self.action_manager = ActionManager()
+        self.spots_could_have_called_liar = []
 
     def get_action(self, state_manager: StateManager) -> Action:
         """Get the next action based on the current state."""
         # might be uneccessary to update state_manager
         self.state_manager = state_manager
         valid_actions = self.action_manager.get_valid_actions(state_manager)
+        if valid_actions.count(Action.call_liar()) > 0:
+            self.spots_could_have_called_liar.append(state_manager.get_game_state().last_bid)
         action_values = {}
         state_key = self.state_manager.get_state_key()
         # Initialize Q-values for valid actions
@@ -88,13 +91,54 @@ class AI:
         )
         self.q_table[current_state_key][action_str] = new_q
 
+    def update_reward(self, enforcement_type: str, state_manager: StateManager) -> None:
+        """Update the reward based on the enforcement type."""
+        game_state = state_manager.get_game_state()
+
+        most_freq_opp_face = game_state.most_freq_opp_face
+        last_bid_qty = game_state.get_last_bid()[0]
+        last_bid_face = game_state.get_last_bid()[1]
+        had_other_actions = self.action_manager.get_valid_actions(state_manager) != [Action.call_liar()]
+        opponent_dice_count = sum(len(hand) for hand in [i_hand for i, i_hand in enumerate(game_state.hands) if i != self.p_index])
+        """ Trying to prevent really stupid behavior for now."""
+        if enforcement_type == "reward_liar_call":
+            # if the player can prove the bid is a lie, large reward.
+            if last_bid_qty > self.rolls.count(last_bid_face) + opponent_dice_count:
+                # The caller was correct - the bid was impossible
+                self.reward += 20
+            # if the player sees that the bid is possible but that it is not the most frequent opponent bid, reward.
+            if last_bid_qty == self.rolls.count(last_bid_face) + opponent_dice_count and most_freq_opp_face != last_bid_face:
+                # The caller was correct - the bid was unlikely
+                self.reward += 6
+            if last_bid_qty == self.rolls.count(last_bid_face) + opponent_dice_count and most_freq_opp_face == last_bid_face:
+                # The caller was correct - the bid was possible but risky
+                self.reward += 5
+            # Base reward for making a correct liar call
+            self.reward += 1.5
+        elif enforcement_type == "punish_liar_call":
+            # if the player called liar but the bid was actually possible, punish harshly.
+            if self.rolls.count(last_bid_face) + opponent_dice_count >= last_bid_qty and had_other_actions:
+                self.reward -= 30
+            # if the player can reason that the bid is probably true and calls a liar, punish
+            if self.rolls.count(last_bid_face) + round(opponent_dice_count / 6) >= last_bid_qty and had_other_actions:
+                self.reward -= 8
+            # if the bid face matches the most frequent opponent face, punish for calling liar
+            if most_freq_opp_face == last_bid_face and had_other_actions:
+                self.reward -= 2
+        elif enforcement_type == "reward_passive":
+            # Reward for not making a bad liar call
+            self.reward += 5
+        elif enforcement_type == "punish_passive":
+            # if there was any time the player could have reasoned that the bid was impossible, punish for not calling liar.
+            for bid in self.spots_could_have_called_liar:
+                if self.rolls.count(bid[1]) + opponent_dice_count < bid[0]: # if the player can reason that the bid is impossible, punish.
+                    self.reward -= 30
+            self.reward -= 5
     #region helpers
+    def get_expected_number_of_opponent_face(self, opponent_dice_count: int) -> int:
+        return round(opponent_dice_count / 6)
 
 
-        # self.epsilon = max(EPSILON, self.epsilon * 0.995)  # Decay exploration rate
-
-    def update_reward(self, reward: float) -> None:
-        self.reward = reward
 
     def roll(self) -> None:
         self.rolls = []
