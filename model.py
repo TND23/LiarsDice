@@ -8,6 +8,7 @@ from const import *
 from Managers.StateManager import StateManager
 from Managers.ActionManager import ActionManager
 from datetime import datetime
+import random
 #from state_approximation.approximation_utils import StateApproximation
 # neural network parameters
 hidden = 10
@@ -20,17 +21,30 @@ class LiarsDicePolicyNetwork(nn.Module):
     """Policy network."""
 
     def __init__(self, input_size: int, hidden_size: int = 128, output_size: int = 100):
+        """
+        Initialize policy network.
+        output_size is fixed at 100:
+        - Indices 0-98: Bid actions (quantity-1) * 6 + (face_value-1)
+        - Index 99: Call liar action
+        """
         super(LiarsDicePolicyNetwork, self).__init__()
-        # fully connected layers
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, output_size)
+        self.fc3 = nn.Linear(hidden_size, 100)  # Fixed size of 100
 
-    # x = game state
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Ensure input is 2D [batch_size, features]
+        if len(x.shape) == 1:
+            x = x.unsqueeze(0)
+
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         logits = self.fc3(x)
+
+        # Ensure output is 2D [batch_size, num_actions]
+        if len(logits.shape) == 1:
+            logits = logits.unsqueeze(0)
+
         return F.softmax(logits, dim=1)
 
 class LiarsDiceValueNetwork(nn.Module):
@@ -123,18 +137,15 @@ class StateEncoder:
         pub_state = game_state.to_public_state()
 
         input_vector = []
-        vector_BET = (MAX_BET_HISTORY * 2 + 1)
-        vector_PLAYERS = MAX_PLAYERS + 1
-        vector_ACTIONS = MAX_ACTIONS + 1
-        vector_DICE = MAX_DICE_COUNTS + 1
-        vector_CLUSTER = MAX_CLUSTER_INFO + 1
-        vector_LAST_BID = MAX_LAST_BID + 1
-        vector_HANDS = MAX_DICE_COUNTS * MAX_PLAYERS  # Maximum possible dice across all players
+        vector_PLAYERS = 1
+        vector_MOST_FREQ_OPP_BID = 1
+        vector_LAST_BID = 2
+        vector_HANDS = MAX_DICE_COUNTS * MAX_PLAYERS # Maximum possible dice across all players
 
         # Calculate total size needed
         total_size = (
-            vector_BET + vector_PLAYERS + vector_ACTIONS + vector_DICE +
-            vector_CLUSTER + vector_LAST_BID + vector_HANDS + 2  # Player index and dice count
+            vector_PLAYERS +
+            vector_MOST_FREQ_OPP_BID + vector_LAST_BID + vector_HANDS# Player index and dice count
         )
 
         # ensure component is expected size
@@ -148,42 +159,8 @@ class StateEncoder:
                 padded.append(0)
             return padded
 
-        # Encode bet history
-        bet_history = [item for sublist in pub_state[STATE_COMPONENTS['BET_HISTORY']] for item in sublist]
-        if len(bet_history) > vector_BET:
-            overlong_amt = len(bet_history) - (MAX_BET_HISTORY * 2 + 1)
-            bet_history = bet_history[0:-overlong_amt-1]
-        weight = FEATURE_WEIGHTS['BET_HISTORY']
-        weighted_data = [val * weight for val in bet_history]
-        input_vector.extend(pad_component(weighted_data, MAX_BET_HISTORY * 2 + 1, "BET_HISTORY"))
-
-        # Encode player info
-        weight = FEATURE_WEIGHTS['PLAYER_INFO']
-        player_info = pub_state[STATE_COMPONENTS['PLAYER_INFO']]
-        weighted_data = [val * weight for val in player_info]
-
-        # Encode last action
-        last_action = pub_state[STATE_COMPONENTS['LAST_ACTION']]
-        weight = FEATURE_WEIGHTS['LAST_ACTION']
-        input_vector.extend(pad_component(last_action, MAX_ACTIONS + 1, "LAST ACTION"))
-
-        # Encode dice counts
-        dice_counts = pub_state[STATE_COMPONENTS['DICE_COUNTS']]
-        weight = FEATURE_WEIGHTS['DICE_COUNTS']
-        weighted_data = [val * weight for val in dice_counts]
-        input_vector.extend(pad_component(dice_counts, MAX_DICE_COUNTS + 1, "DICE COUNTS"))
-
-        # Encode cluster info
-        cluster_info = pub_state[STATE_COMPONENTS['CLUSTER_INFO']]
-        weight = FEATURE_WEIGHTS['CLUSTER_INFO']
-        weighted_data = [val * weight for val in cluster_info]
-        input_vector.extend(pad_component(cluster_info, MAX_CLUSTER_INFO + 1, "CLUSTER INFO"))
-
-        # Encode last bid
-        last_bid = pub_state[STATE_COMPONENTS['LAST_BID']]
-        weight = FEATURE_WEIGHTS['LAST_BID']
-        weighted_data = [val * weight for val in last_bid]
-        input_vector.extend(pad_component(last_bid, MAX_LAST_BID + 1, "LAST BID"))
+        # Add current player index and dice count
+        input_vector.append(player_index)
 
         # Encode hands
         hands = game_state.hands if game_state.hands else []
@@ -192,13 +169,27 @@ class StateEncoder:
             flat_hands.extend(hand)
         weight = FEATURE_WEIGHTS['HANDS']
         weighted_data = [val * weight for val in flat_hands]
-        input_vector.extend(pad_component(flat_hands, vector_HANDS, "HANDS"))
+        input_vector.extend(pad_component(weighted_data, vector_HANDS, "HANDS"))
 
-        # Add current player index and dice count
-        input_vector.append(player_index)
-        input_vector.append(game_state.player_dice_counts[player_index])
 
-        # Ensure final size matches expected
+        # Encode most frequent opponent bid
+        MOST_FREQ_OPP_BID = pub_state[STATE_COMPONENTS['MOST_FREQ_OPP_BID']]
+        weight = FEATURE_WEIGHTS['MOST_FREQ_OPP_BID']
+        weighted_data = weight * MOST_FREQ_OPP_BID
+        input_vector.extend(pad_component(weighted_data, vector_MOST_FREQ_OPP_BID, "MOST FREQ OPP BID"))
+
+        # Encode last bid
+        if pub_state[STATE_COMPONENTS['LAST_BID']] is not None:
+            if pub_state[STATE_COMPONENTS['LAST_BID']][0] is not None:
+                last_bid = pub_state[STATE_COMPONENTS['LAST_BID']]
+                weight = FEATURE_WEIGHTS['LAST_BID']
+                quantity, face_val = last_bid
+                weighted_data = [quantity * weight, face_val * weight]
+        else:
+            weighted_data = [0] * vector_LAST_BID
+        input_vector.extend(pad_component(weighted_data, vector_LAST_BID, "LAST BID"))
+
+
         assert len(input_vector) == total_size, f"Expected size {total_size}, got {len(input_vector)}"
 
         return torch.tensor(input_vector, dtype=torch.float32).unsqueeze(0)
@@ -208,20 +199,13 @@ class ActionDecoder:
     @no_type_check
     @staticmethod
     def decode_action(action_probs: torch.Tensor, state_manager: StateManager, action_manager: ActionManager) -> Action:
-        """Convert action probabilities to a game action.
-
-        Args:
-            action_probs: Tensor of action probabilities from the policy network
-            state_manager: Current state manager containing game state
-            action_manager: Action manager for validating actions
-
-        Returns:
-            Action: The selected action, considering the model's hand
-        """
+        """Convert action probabilities to a game action."""
         valid_actions = action_manager.get_valid_actions(state_manager)
+
         if not valid_actions:
             return Action.call_liar()
-
+        if random.random() < action_manager.random_liar_prob and len(valid_actions) > 1:
+            return Action.call_liar()
         # Get the model's hand from the state
         game_state = state_manager.get_game_state()
         model_hand = game_state.get_model_hand() if game_state else tuple()
@@ -234,16 +218,26 @@ class ActionDecoder:
                 bid = action.bid
                 face_value = bid.face_value
                 if face_value in model_hand:
-                    action_map[i] = action
-            else:  # For non-bid actions (like calling liar), always include
-                action_map[i] = action
+                    # Map the action to a valid index within the policy network's output size
+                    action_idx = (bid.quantity - 1) * 6 + (bid.face_value - 1)
+                    if action_idx < 99:  # Reserve index 99 for "call liar"
+                        action_map[action_idx] = action
+            else:  # For non-bid actions (like calling liar), use last index
+                action_map[99] = action  # Use last index for "call liar"
 
         if not action_map:
             return Action.call_liar()
 
         # Get probabilities for valid actions only
         valid_indices = list(action_map.keys())
-        valid_probs = action_probs[0, valid_indices]  # Assuming action_probs is 2D tensor
+
+        # Ensure action_probs is 2D [batch_size, num_actions]
+        if len(action_probs.shape) == 1:
+            action_probs = action_probs.unsqueeze(0)
+
+        # Get probabilities for valid actions
+        valid_probs = action_probs[0, valid_indices]
+
         # Select action with highest probability among valid actions
         best_idx = valid_indices[torch.argmax(valid_probs).item()]
         return action_map[best_idx]
