@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liar's Dice - Play Against AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <header class="text-center my-4">
+            <h1>Liar's Dice</h1>
+            <p class="lead">Play against an AI opponent</p>
+            <p class="rules">
+                <strong>Rules:</strong>
+                <br>
+                - The game is played with a five six-sided dice.
+                <br>
+                - Player's take turns making a bid or calling liar.
+                <br>
+                - A bid is made by stating how many dice of a certain face value are in the player's hand.
+                <br>
+                - A player may call liar if they think the other player is lying (the other player must have already
+                made a bid).
+                <br>
+                - If a player calls liar and is correct, they win the round and the other player loses a die.
+                <br>
+                - If a player calls liar and is incorrect, they lose a die.
+                <br>
+                - The game ends when a player loses all their dice.
+            </p>
+        </header>
+
+        <div class="row">
+            <!-- Game Board -->
+            <div class="col-md-8 mx-auto">
+                <div class="card game-board">
+                    <div class="card-body">
+                        <!-- AI Player Section -->
+                        <div class="player-section ai-player mb-4">
+                            <div class="d-flex align-items-center">
+                                <img src="ai-avatar.png" alt="AI Player" class="player-avatar">
+                                <div class="ms-3">
+                                    <h3>AI Player</h3>
+                                    <div class="dice-container" id="ai-dice"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Game History -->
+                        <div class="game-history mb-4">
+                            <h4>Round History</h4>
+                            <div class="history-container" id="history"></div>
+                        </div>
+
+                        <!-- Human Player Section -->
+                        <div class="player-section human-player">
+                            <div class="d-flex align-items-center">
+                                <img src="human-avatar.png" alt="You" class="player-avatar">
+                                <div class="ms-3">
+                                    <h3>You</h3>
+                                    <div class="dice-container" id="human-dice"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="col-md-4 mx-auto">
+                <div class="card controls">
+                    <div class="card-body">
+                        <h4>Your Move</h4>
+                        <div class="mb-3">
+                            <label for="quantity" class="form-label">Quantity</label>
+                            <input type="number" class="form-control" id="quantity" min="1" max="10">
+                        </div>
+                        <div class="mb-3">
+                            <label for="face-value" class="form-label">Face Value</label>
+                            <input type="number" class="form-control" id="face-value" min="1" max="6">
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" id="bid-button">Make Bid</button>
+                            <button class="btn btn-danger" id="liar-button">Call Liar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="game.js"></script>
+</body>
+
+</html>
