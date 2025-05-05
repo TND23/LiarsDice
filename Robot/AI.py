@@ -130,9 +130,9 @@ class AI:
             self.reward += 5
         elif enforcement_type == "punish_passive":
             # if there was any time the player could have reasoned that the bid was impossible, punish for not calling liar.
-            for bid in self.spots_could_have_called_liar:
-                if self.rolls.count(bid[1]) + opponent_dice_count < bid[0]: # if the player can reason that the bid is impossible, punish.
-                    self.reward -= 30
+            #for bid in self.spots_could_have_called_liar:
+            #    if self.rolls.count(bid[1]) + opponent_dice_count < bid[0]: # if the player can reason that the bid is impossible, punish.
+            #        self.reward -= 30
             self.reward -= 5
     #region helpers
     def get_expected_number_of_opponent_face(self, opponent_dice_count: int) -> int:
