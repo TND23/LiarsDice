@@ -49,13 +49,13 @@ class GameState:
             players=players
         )
         return game_state
-
-    def get_active_player_hand(self) -> Tuple[int]:
         """Get the hand of the current active player."""
         return self.hands[self.current_player] if self.hands and self.current_player < len(self.hands) else tuple()
 
     def get_model_hand(self) -> Tuple[int]:
-        """Get the hand of the model (player 1)."""
+        """Get the hand of the model (player 1)
+
+    def get_active_player_hand(self) -> Tuple[int]:."""
         return self.hands[1] if self.hands and len(self.hands) > 1 else tuple()
 
     def add_hands(self, hands: List[Tuple[int]]) -> None:

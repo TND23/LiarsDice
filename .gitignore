@@ -5,6 +5,5 @@ __pycache__/
 .vscode/settings.json
 *.pyc
 /game_logs
-/Site
 /data
 /models
