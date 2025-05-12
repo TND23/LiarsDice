@@ -1,4 +1,5 @@
 import numpy as np
+from sympy import false
 from Action import Action, ActionType, Bid
 import random
 from const import *
@@ -98,47 +99,70 @@ class AI:
         most_freq_opp_face = game_state.most_freq_opp_face
         last_bid_qty = game_state.get_last_bid()[0]
         last_bid_face = game_state.get_last_bid()[1]
+        bid_probability = self.calculate_bid_probability(game_state.get_last_bid())
         had_other_actions = self.action_manager.get_valid_actions(state_manager) != [Action.call_liar()]
         opponent_dice_count = sum(len(hand) for hand in [i_hand for i, i_hand in enumerate(game_state.hands) if i != self.p_index])
         """ Trying to prevent really stupid behavior for now."""
         if enforcement_type == "reward_liar_call":
             # if the player can prove the bid is a lie, large reward.
-            if last_bid_qty > self.rolls.count(last_bid_face) + opponent_dice_count:
+            if bid_probability == 0.0:
                 # The caller was correct - the bid was impossible
-                self.reward += 20
+                self.reward += 30
             # if the player sees that the bid is possible but that it is not the most frequent opponent bid, reward.
-            if last_bid_qty == self.rolls.count(last_bid_face) + opponent_dice_count and most_freq_opp_face != last_bid_face:
-                # The caller was correct - the bid was unlikely
-                self.reward += 6
-            if last_bid_qty == self.rolls.count(last_bid_face) + opponent_dice_count and most_freq_opp_face == last_bid_face:
-                # The caller was correct - the bid was possible but risky
-                self.reward += 5
+            else:
+                self.reward += min(1/bid_probability,29.9)
             # Base reward for making a correct liar call
-            self.reward += 1.5
+            if bid_probability > 0.2: # extra reward for extra unlikely events
+                self.reward += 5
+            if (last_bid_qty / self._total_dice()) > 0.5: # extra reward for high bids
+                self.reward += 2
+            self.reward += 2.5
         elif enforcement_type == "punish_liar_call":
-            # if the player called liar but the bid was actually possible, punish harshly.
-            if self.rolls.count(last_bid_face) + opponent_dice_count >= last_bid_qty and had_other_actions:
-                self.reward -= 30
+            # if the player called liar but the bid was provably true, punish harshly.
+            if bid_probability == 1.0:
+                self.reward -= 20
             # if the player can reason that the bid is probably true and calls a liar, punish
-            if self.rolls.count(last_bid_face) + round(opponent_dice_count / 6) >= last_bid_qty and had_other_actions:
+            elif bid_probability > 0.5 and had_other_actions and most_freq_opp_face != last_bid_face:
                 self.reward -= 8
+            # if the player can reason that the bid is probably true and calls a liar, punish
+            elif bid_probability > 0.5 and had_other_actions == False:
+                self.reward -= 1
             # if the bid face matches the most frequent opponent face, punish for calling liar
-            if most_freq_opp_face == last_bid_face and had_other_actions:
-                self.reward -= 2
+            if bid_probability > 0.5 and most_freq_opp_face == last_bid_face and had_other_actions:
+                self.reward -= 10
+            elif bid_probability < 0.5:
+                self.reward -= 4
         elif enforcement_type == "reward_passive":
             # Reward for not making a bad liar call
             self.reward += 5
         elif enforcement_type == "punish_passive":
-            # if there was any time the player could have reasoned that the bid was impossible, punish for not calling liar.
-            #for bid in self.spots_could_have_called_liar:
-            #    if self.rolls.count(bid[1]) + opponent_dice_count < bid[0]: # if the player can reason that the bid is impossible, punish.
-            #        self.reward -= 30
-            self.reward -= 5
+            if bid_probability < 0.5:
+                self.reward -= 15
+            else:
+                self.reward -= 8
+
     #region helpers
     def get_expected_number_of_opponent_face(self, opponent_dice_count: int) -> int:
-        return round(opponent_dice_count / 6)
+        return round(opponent_dice_count / NUMBER_FACES)
+
+    def _total_dice(self):
+        assert self.state_manager is not None
+        return sum(len(hand) for hand in [i_hand for i, i_hand in enumerate(self.state_manager.get_game_state().hands) if i != self.p_index]) + self.NUMDICE
 
 
+    def calculate_bid_probability(self, bid: Tuple[int, int]) -> float:
+        """Calculate the probability of the bid being true based on the number of opponent dice and the number of dice the player has rolled."""
+        opponent_dice_count = self._total_dice() - self.NUMDICE
+        dice_of_face = self.rolls.count(bid[1])
+        opponent_dice_required = bid[0] - dice_of_face
+        if opponent_dice_required <= 0:
+            return 1.0
+        if opponent_dice_required > opponent_dice_count:
+            return 0.0
+
+        possibilities = NUMBER_FACES ** opponent_dice_count # number of possible outcomes for the opponent's dice
+        ways_could_happen = NUMBER_FACES ** (opponent_dice_count - opponent_dice_required) # number of faces to power of number of dice that can be anything
+        return ways_could_happen / possibilities
 
     def roll(self) -> None:
         self.rolls = []
