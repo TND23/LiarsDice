@@ -8,7 +8,7 @@ from model import LiarsDiceModel, StateEncoder, ActionDecoder
 from Robot.qtable_persistence import QTablePersistence
 from GameState import GameState
 from Action import Action
-from const import EPSILON, CUR_Q_TABLE_NAME, LEARN_RATE, MEMORY_SIZE, STATE_COMPONENTS
+from const import EPSILON, CUR_Q_TABLE_NAME, LEARN_RATE, MAX_DICE_COUNTS, MAX_PLAYERS, MEMORY_SIZE, STATE_COMPONENTS, BATCH_SIZE
 from Managers.ActionManager import ActionManager
 
 class DeepQLearningAgent:
@@ -21,7 +21,7 @@ class DeepQLearningAgent:
                  gamma: float = 0.99,
                  epsilon: float = EPSILON,
                  memory_size: int = MEMORY_SIZE,
-                 batch_size: int = 64,
+                 batch_size: int = BATCH_SIZE,
                  q_table_path: str = "./data/q_tables",
                  model_name: Optional[str] = None):
 
@@ -96,7 +96,6 @@ class DeepQLearningAgent:
         if random.random() < self.epsilon:
             valid_actions = action_manager.get_valid_actions(state_man)
             return random.choice(valid_actions)
-
         # Get Q-values from both neural network and Q-table
         state_tensor = StateEncoder.encode_state(state, player_index)
         nn_q_values = self.model.get_policy(state_tensor)
@@ -107,10 +106,17 @@ class DeepQLearningAgent:
         table_values = None
         if state_key in self.q_table_cache:
             table_values = torch.tensor(list(self.q_table_cache[state_key].values()))
+
+            # Pad table_values to match nn_q_values shape if needed
+            if table_values.shape != nn_q_values.shape:
+                fill_value = 0
+                if nn_q_values.shape[1] > table_values.shape[0]:
+                    padded_list = [fill_value] * (nn_q_values.shape[1] - table_values.shape[0])
+                    table_values = torch.tensor(table_values.tolist() + padded_list)
+
             combined_q_values = (nn_q_values + table_values) / 2
         else:
             combined_q_values = nn_q_values
-
         return ActionDecoder.decode_action(combined_q_values, state_man, action_manager)
 
     # see https://deeplizard.com/learn/video/Bcuj2fTH4_4 for definition of experience / memory
@@ -118,20 +124,33 @@ class DeepQLearningAgent:
     def remember(self, state: GameState, action: Action, reward: float,
                 next_state: GameState, done: bool, player_index: int, hand: Tuple[int] = (0,)):
         """Store experience in replay memory."""
+        try:
+            state_tensor = StateEncoder.encode_state(state, player_index)
+            next_state_tensor = StateEncoder.encode_state(next_state, player_index)
+            if  state_tensor.size(1) != next_state_tensor.size(1):
+                print(f"State tensor size: {state_tensor.size(1)}, Next state tensor size: {next_state_tensor.size(1)}")
+                return
+            self.memory.append((
+                state,
+                action,
+                reward,
+                next_state,
+                done,
+                player_index,
+                hand
+            ))
 
-        self.memory.append((
-            state,
-            action,
-            reward,
-            next_state,
-            done,
-            player_index,
-            hand
-        ))
+        except Exception as e:
+            print(f"Error encoding state: {e}")
+            return
+
 
     # TODO: implement next_state
     def replay(self):
+
         """Train on a batch of experiences."""
+        if len(self.memory) < 1000:
+            return
         if len(self.memory) < self.batch_size:
             return
 
