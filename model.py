@@ -201,10 +201,9 @@ class ActionDecoder:
     def decode_action(action_probs: torch.Tensor, state_manager: StateManager, action_manager: ActionManager) -> Action:
         """Convert action probabilities to a game action."""
         valid_actions = action_manager.get_valid_actions(state_manager)
-
         if not valid_actions:
             return Action.call_liar()
-        if random.random() < action_manager.random_liar_prob and len(valid_actions) > 1:
+        if random.random() < action_manager.random_liar_prob and len(valid_actions) > 1 and state_manager.get_game_state().last_bid is not None:
             return Action.call_liar()
         # Get the model's hand from the state
         game_state = state_manager.get_game_state()
