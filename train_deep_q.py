@@ -66,7 +66,8 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
                 episode_rewards[current_player_idx] += reward
                 #action_manager.decay_random_liar_prob()
                 agent.replay()
-
+                agent.learning_rate = get_learning_rate(episode, agent.learning_rate)
+                agent.epsilon = get_epsilon(episode, agent.epsilon)
                 # Update target network periodically
                 if game.round_number % 100 == 0:
                     agent.update_target_model()
@@ -140,6 +141,15 @@ def evaluate_agent(agent: DeepQLearningAgent, num_games: int = 5) -> float:
 
     return wins / num_games
 
+def get_learning_rate(episode: int, initial_lr: float = 0.01) -> float:
+    """Decay learning rate over time"""
+    return initial_lr * (1.0 / (1.0 + 0.0001 * episode))
+
+def get_epsilon(episode: int, initial_epsilon: float = 0.3) -> float:
+    """Decay epsilon over time"""
+    return max(0.01, initial_epsilon * (1.0 / (1.0 + 0.0001 * episode)))
+
+
 def main():
     torch.manual_seed(42)
     random.seed(42)
@@ -162,7 +172,7 @@ def main():
     )
 
     print("Training deep Q-learning agent...")
-    total_rewards, win_rates = train_deep_q(agent, num_episodes=2000)
+    total_rewards, win_rates = train_deep_q(agent, num_episodes=1000)
 
     # Evaluate final agent
     print("\nEvaluating final agent...")
