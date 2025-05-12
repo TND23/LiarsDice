@@ -43,6 +43,7 @@ class AIGame:
     def make_players(self):
         for p in range(self.player_ct):
             self.players.append(AI(p, self.action_manager))
+            self.players[p].state_manager = self.state_manager
         self.active_player = self.players[0]
 
     def start_round(self):
