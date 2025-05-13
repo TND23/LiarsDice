@@ -45,6 +45,7 @@ def display_game_state(game: AIGame, player_index: int):
 
 def play_human_vs_ai(model_path: str = CUR_MODEL_PATH):
     """Play a game of Liar's Dice against the AI."""
+    print(CUR_MODEL_PATH)
     torch.manual_seed(42)
     random.seed(42)
     np.random.seed(42)

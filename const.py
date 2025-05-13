@@ -1,6 +1,6 @@
 # Training constants
 MAX_MEM = 100_000
-BATCH_SIZE = 2**6
+BATCH_SIZE = 2**9
 LEARN_RATE = 0.01
 
 MAX_DICE_PER_PLAYER = 5 # if it can go up, even better.
@@ -34,17 +34,17 @@ MIN_FACE_VALUE = 1
 MIN_PLAYERS = 2
 
 # State approximation constants
-MEMORY_SIZE = 1000
+MEMORY_SIZE = 10000
 # Approximation constants
 MAX_ROUND_MEMORY = 4
 NUMBER_FACES = 6
 
 MAX_DIE_PER_PLAYER = 5
-RANDOM_LIAR_PROB = 0.2
+RANDOM_LIAR_PROB = 0.5
 # AI constants
-EPSILON = 1
+EPSILON = .3
 DISCOUNT_FACTOR = 0.9
-LEARNING_RATE = 0.1
+LEARNING_RATE = 0.001
 
 # Distance constants
 # if a die face is maximum, it is considered more distant from the next highest die face than it would be otherwise.
@@ -53,7 +53,7 @@ MAX_DIE_BONUS_WEIGHT = 2
 PUB_STATE_SIZE = 10
 MAX_TOTAL_DICE = MAX_PLAYERS * MAX_DICE_PER_PLAYER
 # Data constants
-CUR_Q_TABLE_NAME = "KidGloves2"
-CUR_MODEL_NAME = "KidGloves2_model.pt"
+CUR_Q_TABLE_NAME = "SD"
+CUR_MODEL_NAME = "SD.pt"
 CUR_MODEL_PATH = "models/deep_q/" + CUR_MODEL_NAME
 CUR_MODEL_ONNX_PATH = "models/deep_q/" + CUR_MODEL_NAME + ".onnx"

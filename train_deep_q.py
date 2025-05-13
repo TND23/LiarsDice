@@ -172,7 +172,7 @@ def main():
     )
 
     print("Training deep Q-learning agent...")
-    total_rewards, win_rates = train_deep_q(agent, num_episodes=1000)
+    total_rewards, win_rates = train_deep_q(agent, num_episodes=10000)
 
     # Evaluate final agent
     print("\nEvaluating final agent...")

@@ -26,6 +26,7 @@ class AI:
         self.state_manager = StateManager()
         self.persistence = QTablePersistence()
         self.action_manager = ActionManager()
+        self.bid_history = []
 
     def get_action(self, state_manager: StateManager) -> Action:
         """Get the next action based on the current state."""

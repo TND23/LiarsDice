@@ -10,8 +10,6 @@ import copy
 # The StateKey is the state of the game as seen by the Q-table.
 # The StateKey is used to index the Q-table and update the GameState.
 
-#TODO: refactor so that the state / next state is passed as parameter and dry out the code.
-#TODO: alternatively, dodn't store the next state at all and just update next state by hand
 class StateManager:
     def __init__(self):
         self._game_state = None

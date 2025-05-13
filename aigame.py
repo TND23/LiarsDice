@@ -56,8 +56,6 @@ class AIGame:
         self.game_state.current_player = 0
         self.state_manager.initialize_from_game_state(self.game_state)
         self.round_number = 1
-        for p in self.players:
-            p.spots_could_have_called_liar = []
         return self.state_manager.get_public_state()
 
     def step(self) -> Action:
@@ -69,9 +67,15 @@ class AIGame:
         action = self.active_player.get_action(self.state_manager)
         if action.is_bid():
             self.round_number += 1
+            self.round_history.append(action)
+            if len(self.round_history) >= 2:
+                if self.round_history[-2].is_bid():
+                    if action.bid.quantity - self.round_history[-2].bid.quantity > 2:
+                        self.active_player.reward -= 10 * (action.bid.quantity - self.round_history[-2].bid.quantity) # punish for over betting
             return self.apply_bid(action)
         elif action.is_call_liar():
             self.round_number += 1
+            self.round_history.append(action)
             return self.apply_liar_call(action)
         raise ValueError(f"Invalid action type: {action.type}")
 
@@ -88,7 +92,6 @@ class AIGame:
         """Apply a bid action to the game state."""
         assert isinstance(action, Action)
         assert action.is_bid()
-        self.round_history.append(action)
         bid = action.bid.face_value
         if bid not in self.face_to_number_of_bids:
             self.face_to_number_of_bids[bid] = 0
@@ -115,7 +118,6 @@ class AIGame:
     @no_type_check
     # apply liar call action to the game state
     def apply_liar_call(self, action: Action) -> Action:
-        self.round_history.append(action)
         last_bid = self.game_state.get_last_bid()
         if not last_bid:
             raise ValueError("Cannot call liar when there are no bids")
