@@ -89,11 +89,12 @@ class DeepQLearningAgent:
 
     # named to avoid confusion with AI.get_action
     # now with more cacheing
-    def nnget_action(self, state_man: StateManager, player_index: int, action_manager: ActionManager) -> Action:
+    def nnget_action(self, state_man: StateManager, player_index: int, action_manager: ActionManager,
+                     explore: bool = True) -> Action:
         """Get action using epsilon-greedy policy."""
         assert isinstance(state_man, StateManager)
         state = state_man.get_game_state()
-        if random.random() < self.epsilon:
+        if explore and random.random() < self.epsilon:
             valid_actions = action_manager.get_valid_actions(state_man)
             return random.choice(valid_actions)
         # Get Q-values from both neural network and Q-table

@@ -198,7 +198,8 @@ class ActionDecoder:
     """Decodes neural network outputs into game actions."""
     @no_type_check
     @staticmethod
-    def decode_action(action_probs: torch.Tensor, state_manager: StateManager, action_manager: ActionManager) -> Action:
+    def decode_action(action_probs: torch.Tensor, state_manager: StateManager, action_manager: ActionManager,
+                      player_index: int = 1) -> Action:
         """Convert action probabilities to a game action."""
         valid_actions = action_manager.get_valid_actions(state_manager)
         if not valid_actions:
@@ -207,7 +208,7 @@ class ActionDecoder:
             return Action.call_liar()
         # Get the model's hand from the state
         game_state = state_manager.get_game_state()
-        model_hand = game_state.get_model_hand() if game_state else tuple()
+        model_hand = game_state.hands[player_index] if game_state and player_index < len(game_state.hands) else tuple()
 
         # Create action mapping and filter based on model's hand
         action_map = {}
@@ -240,5 +241,4 @@ class ActionDecoder:
         # Select action with highest probability among valid actions
         best_idx = valid_indices[torch.argmax(valid_probs).item()]
         return action_map[best_idx]
-
 

@@ -13,6 +13,9 @@ from const import CUR_MODEL_NAME, CUR_MODEL_PATH, CUR_Q_TABLE_NAME, LEARN_RATE
 from const import EPSILON
 def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optional[DeepQLearningAgent] = None, q_table_name=CUR_Q_TABLE_NAME) -> Tuple[List[float], List[float]]:
     """Train the deep Q-learning agent."""
+    if opponent is agent:
+        raise ValueError("The training agent and opponent must be different instances.")
+
     total_rewards = []
     win_rates = []
     action_manager = ActionManager()
@@ -25,53 +28,84 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
             episode_rewards = [0.0] * len(game.players)
             done = False
             state_man = game.state_manager
-            reward = 0.0
+            pending_transition = None
 
-            # Use the agent's cached Q-table
-            game.players[0].q_table = agent.q_table_cache
             while not done:
                 current_state = game.state_manager.get_game_state()
+                current_player_idx = game.IDX
+
+                if current_player_idx == 0 and pending_transition is not None:
+                    agent.remember(
+                        pending_transition["state"],
+                        pending_transition["action"],
+                        pending_transition["reward"],
+                        copy.deepcopy(current_state),
+                        False,
+                        0,
+                        pending_transition["hand"]
+                    )
+                    pending_transition = None
+                    agent.replay()
+
                 if not current_state.hands:
                     print("Warning: No hands in current state!")
                     game.reset_hands()
                     current_state = game.state_manager.get_game_state()
 
                 hand = current_state.hands[current_state.current_player]
-                current_player_idx = game.IDX
-                action = agent.nnget_action(state_man, current_player_idx, action_manager)
+                if current_player_idx == 0:
+                    action = agent.nnget_action(state_man, current_player_idx, action_manager)
+                elif opponent is not None:
+                    action = opponent.nnget_action(state_man, current_player_idx, action_manager, explore=False)
+                else:
+                    valid_actions = action_manager.get_valid_actions(state_man)
+                    action = random.choice(valid_actions)
+
                 prev_state = copy.deepcopy(current_state)
+                previous_rewards = [player.reward for player in game.players]
                 game.step(action=action, learn_tabular=False)
-                next_state = copy.deepcopy(game.game_state)
-                reward = game.players[0].reward
-                # Calculate reward
+                reward_deltas = [
+                    player.reward - previous_reward
+                    for player, previous_reward in zip(game.players, previous_rewards)
+                ]
+                for player_index, player_reward in enumerate(reward_deltas):
+                    episode_rewards[player_index] += player_reward
+
+                if current_player_idx == 0:
+                    pending_transition = {
+                        "state": prev_state,
+                        "action": action,
+                        "reward": reward_deltas[0],
+                        "hand": hand
+                    }
+                elif pending_transition is not None:
+                    pending_transition["reward"] += reward_deltas[0]
+
                 if game.check_game_over():
                     done = True
-                    winner_idx = game.players[0].p_index
-                    if current_player_idx == winner_idx:
-                        reward = 10 + game.players[winner_idx].reward
-                    else:
-                        reward = -10 + game.players[winner_idx].reward
+                    winner_idx = next(player.p_index for player in game.players if player.NUMDICE > 0)
+                    reward = 10 if winner_idx == 0 else -10
+                    episode_rewards[0] += reward
+                    episode_rewards[1] -= reward
+                    if pending_transition is not None:
+                        pending_transition["reward"] += reward
+                        agent.remember(
+                            pending_transition["state"],
+                            pending_transition["action"],
+                            pending_transition["reward"],
+                            copy.deepcopy(game.game_state),
+                            True,
+                            0,
+                            pending_transition["hand"]
+                        )
+                        pending_transition = None
+                        agent.replay()
 
-                # Store experience
-                agent.remember(
-                    prev_state,
-                    action,
-                    reward,
-                    next_state,
-                    done,
-                    current_player_idx,
-                    hand
-                )
-
-                # Update episode rewards and replay
-                episode_rewards[current_player_idx] += reward
-                #action_manager.decay_random_liar_prob()
-                agent.replay()
-                agent.learning_rate = get_learning_rate(episode, agent.learning_rate)
-                agent.epsilon = get_epsilon(episode, agent.epsilon)
-                # Update target network periodically
-                if game.round_number % 100 == 0:
-                    agent.update_target_model()
+                if current_player_idx == 0:
+                    agent.learning_rate = get_learning_rate(episode, agent.learning_rate)
+                    agent.epsilon = get_epsilon(episode, agent.epsilon)
+                    if game.round_number % 100 == 0:
+                        agent.update_target_model()
 
             # Calculate win rate
             total_rewards.append(sum(episode_rewards))
