@@ -1,6 +1,7 @@
 import torch
 import random
 import numpy as np
+import copy
 from typing import List, Tuple, Optional
 from Managers.StateManager import StateManager
 from deep_q_learning import DeepQLearningAgent
@@ -38,7 +39,7 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
                 hand = current_state.hands[current_state.current_player]
                 current_player_idx = game.IDX
                 action = agent.nnget_action(state_man, current_player_idx, action_manager)
-                prev_state = current_state
+                prev_state = copy.deepcopy(current_state)
                 game.step(action=action, learn_tabular=False)
                 next_state = game.state_manager.get_next_state(action)
                 reward = game.players[0].reward
