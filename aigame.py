@@ -74,22 +74,22 @@ class AIGame:
                 if self.round_history[-2].is_bid():
                     if action.bid.quantity - self.round_history[-2].bid.quantity > 2:
                         self.active_player.reward -= 10 * (action.bid.quantity - self.round_history[-2].bid.quantity) # punish for over betting
-            return self.apply_bid(action)
+            return self.apply_bid(action, learn_tabular=learn_tabular)
         elif action.is_call_liar():
             self.round_history.append(action)
-            return self.apply_liar_call(action)
+            return self.apply_liar_call(action, learn_tabular=learn_tabular)
         raise ValueError(f"Invalid action type: {action.type}")
 
     # for agents with models
-    def apply_action(self, action: Action) -> Action:
+    def apply_action(self, action: Action, learn_tabular: bool = True) -> Action:
         if action.is_bid():
-            return self.apply_bid(action)
+            return self.apply_bid(action, learn_tabular=learn_tabular)
         elif action.is_call_liar():
-            return self.apply_liar_call(action)
+            return self.apply_liar_call(action, learn_tabular=learn_tabular)
         raise ValueError(f"Invalid action type: {action.type}")
     # apply bid action to the game state
     @no_type_check
-    def apply_bid(self, action: Action) -> Action:
+    def apply_bid(self, action: Action, learn_tabular: bool = True) -> Action:
         """Apply a bid action to the game state."""
         assert isinstance(action, Action)
         assert action.is_bid()
@@ -110,15 +110,16 @@ class AIGame:
         self.active_player = self.players[self.IDX]
 
         self.state_manager.update_from_action(action)
-        prev_player.update_q_value(
-            action,
-            prev_player.reward
-        )
+        if learn_tabular:
+            prev_player.update_q_value(
+                action,
+                prev_player.reward
+            )
 
         return action
     @no_type_check
     # apply liar call action to the game state
-    def apply_liar_call(self, action: Action) -> Action:
+    def apply_liar_call(self, action: Action, learn_tabular: bool = True) -> Action:
         last_bid = self.game_state.get_last_bid()
         if not last_bid:
             raise ValueError("Cannot call liar when there are no bids")
@@ -158,15 +159,16 @@ class AIGame:
         self.state_manager.initialize_from_game_state(self.game_state)
 
         self.state_manager.update_from_action(action)
-        caller.update_q_value(
-            action,
-            caller.reward
-        )
-        if previous_player in self.players:
-            previous_player.update_q_value(
-                Action.make_bid(*last_bid),
-                previous_player.reward
+        if learn_tabular:
+            caller.update_q_value(
+                action,
+                caller.reward
             )
+            if previous_player in self.players:
+                previous_player.update_q_value(
+                    Action.make_bid(*last_bid),
+                    previous_player.reward
+                )
         self.roll()
         return action
 
