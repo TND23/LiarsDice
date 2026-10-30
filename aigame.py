@@ -58,15 +58,17 @@ class AIGame:
         self.round_number = 1
         return self.state_manager.get_public_state()
 
-    def step(self) -> Action:
+    def step(self, action: Action = None, learn_tabular: bool = True) -> Action:
         """Execute one step of the game."""
         if self.game_over:
             return Action.call_liar()
         if(self.active_player is None):
             self.active_player = self.players[0]
-        action = self.active_player.get_action(self.state_manager)
+        if action is None:
+            action = self.active_player.get_action(self.state_manager)
+        # should put if action is illegal and raise here
+        self.round_number += 1
         if action.is_bid():
-            self.round_number += 1
             self.round_history.append(action)
             if len(self.round_history) >= 2:
                 if self.round_history[-2].is_bid():
@@ -74,7 +76,6 @@ class AIGame:
                         self.active_player.reward -= 10 * (action.bid.quantity - self.round_history[-2].bid.quantity) # punish for over betting
             return self.apply_bid(action)
         elif action.is_call_liar():
-            self.round_number += 1
             self.round_history.append(action)
             return self.apply_liar_call(action)
         raise ValueError(f"Invalid action type: {action.type}")
