@@ -8,7 +8,7 @@ from model import LiarsDiceModel, StateEncoder, ActionDecoder
 from Robot.qtable_persistence import QTablePersistence
 from GameState import GameState
 from Action import Action
-from const import EPSILON, CUR_Q_TABLE_NAME, LEARN_RATE, MAX_DICE_COUNTS, MAX_PLAYERS, MEMORY_SIZE, STATE_COMPONENTS, BATCH_SIZE
+from const import EPSILON, CUR_Q_TABLE_NAME, LEARN_RATE, MAX_DICE_COUNTS, MAX_PLAYERS, MAX_FACE_VALUE, MEMORY_SIZE, STATE_COMPONENTS, BATCH_SIZE
 from Managers.ActionManager import ActionManager
 
 class DeepQLearningAgent:
@@ -118,7 +118,7 @@ class DeepQLearningAgent:
             combined_q_values = (nn_q_values + table_values) / 2
         else:
             combined_q_values = nn_q_values
-        return ActionDecoder.decode_action(combined_q_values, state_man, action_manager)
+        return ActionDecoder.decode_action(combined_q_values, state_man, action_manager, player_index)
 
     # see https://deeplizard.com/learn/video/Bcuj2fTH4_4 for definition of experience / memory
     # TODO: implement next_state (this isn't called until then)
@@ -164,16 +164,21 @@ class DeepQLearningAgent:
             state_tensors.append(StateEncoder.encode_state(state, player_idx))
             next_state_tensors.append(StateEncoder.encode_state(next_state, player_idx))
 
-        states = torch.stack(state_tensors, dim=0) # add current state tensors
-        next_states = torch.stack(next_state_tensors, dim=0) # add next_state_tensors
-        rewards = torch.tensor(rewards, dtype=torch.float32, requires_grad=True).unsqueeze(dim=1)
-        dones = torch.tensor(dones, dtype=torch.float32, requires_grad=True).unsqueeze(dim=1) # These are always False/0 right now
-        current_q_values = self.model.get_policy(states)
+        states = torch.cat(state_tensors, dim=0)
+        next_states = torch.cat(next_state_tensors, dim=0)
+        rewards = torch.tensor(rewards, dtype=torch.float32).unsqueeze(dim=1)
+        dones = torch.tensor(dones, dtype=torch.float32).unsqueeze(dim=1)
+        action_indices = torch.tensor([
+            (action.bid.quantity - 1) * MAX_FACE_VALUE + action.bid.face_value - 1
+            if action.is_bid() else 99
+            for action in actions
+        ], dtype=torch.long).unsqueeze(dim=1)
+        current_q_values = self.model.get_policy(states).gather(1, action_indices)
 
         with torch.no_grad():
             next_q_values = self.target_model.get_policy(next_states)
             max_next_q_values = torch.max(next_q_values, dim=1)[0].unsqueeze(dim=1)
-            target_q_values = rewards.unsqueeze(dim=1) + (1+dones.unsqueeze(dim=1)) * self.gamma * max_next_q_values
+            target_q_values = rewards + (1 - dones) * self.gamma * max_next_q_values
 
         self.optimizer.zero_grad()
         loss = self.criterion(current_q_values, target_q_values) # Mean Squared Error Loss

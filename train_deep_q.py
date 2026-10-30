@@ -19,9 +19,14 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
     total_rewards = []
     win_rates = []
     action_manager = ActionManager()
+    initial_learning_rate = agent.learning_rate
+    initial_epsilon = agent.epsilon
 
     for episode in range(num_episodes):
         try:
+            agent.learning_rate = get_learning_rate(episode, initial_learning_rate)
+            agent.epsilon = get_epsilon(episode, initial_epsilon)
+
             # Create a new game
             game = AIGame(2, 5, action_manager)
             game.reset_hands()
@@ -102,8 +107,6 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
                         agent.replay()
 
                 if current_player_idx == 0:
-                    agent.learning_rate = get_learning_rate(episode, agent.learning_rate)
-                    agent.epsilon = get_epsilon(episode, agent.epsilon)
                     if game.round_number % 100 == 0:
                         agent.update_target_model()
 
