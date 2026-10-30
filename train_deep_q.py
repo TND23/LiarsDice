@@ -39,7 +39,7 @@ def train_deep_q(agent: DeepQLearningAgent, num_episodes: int, opponent: Optiona
                 current_player_idx = game.IDX
                 action = agent.nnget_action(state_man, current_player_idx, action_manager)
                 prev_state = current_state
-                game.step()
+                game.step(action=action, learn_tabular=False)
                 next_state = game.state_manager.get_next_state(action)
                 reward = game.players[0].reward
                 # Calculate reward
